@@ -83,6 +83,8 @@ A web-based performance analysis tool that scans applications via URL, identifie
 - ✅ "Analyze" button
 - ✅ Loading state indicator
 - ✅ Error message display
+- ✅ Device type selector (Desktop/Mobile)
+- ✅ Network throttling selector (WiFi/4G/3G)
 
 #### 1.2 Report Display Page
 - ✅ Performance score visualization
@@ -108,15 +110,17 @@ A web-based performance analysis tool that scans applications via URL, identifie
 - ✅ Error responses
 
 #### 2.3 Performance Analysis Engine
-- ✅ Set up headless browser automation (Puppeteer/Chrome)
+- ✅ Set up headless browser automation (Playwright/Chromium)
 - ✅ Configure browser environment (mobile/desktop simulation)
+- ✅ User-configurable device type (Desktop/Mobile)
+- ✅ User-configurable network throttling (WiFi/4G/3G)
 - ✅ Load target URL in controlled browser environment
 - ✅ Collect performance data during page load:
   - Network request timing and sizes
   - JavaScript execution metrics
   - Rendering events (paints, layout shifts)
   - Resource loading patterns
-- ✅ Simulate real-world conditions (slow network, CPU throttling)
+- ✅ Simulate real-world conditions (network throttling, CPU throttling)
 - ✅ Execute performance analysis (30-60 seconds)
 
 #### 2.4 Report Processing

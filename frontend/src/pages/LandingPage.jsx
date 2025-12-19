@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import URLInput from '../components/URLInput'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+import AnalysisOptions from '../components/AnalysisOptions'
+import { analyzeURL } from '../services/api'
 import './LandingPage.css'
 
 function LandingPage() {
@@ -11,6 +13,8 @@ function LandingPage() {
   const [isValid, setIsValid] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [error, setError] = useState('')
+  const [deviceType, setDeviceType] = useState('desktop')
+  const [networkThrottling, setNetworkThrottling] = useState('4g')
 
   const validateURL = (urlString) => {
     if (!urlString.trim()) {
@@ -44,26 +48,39 @@ function LandingPage() {
     setIsAnalyzing(true)
     setError('')
 
-    // TODO: This will be connected to the backend API in the next step
-    // For now, simulate analysis delay and navigate to report page with mock data
-    setTimeout(() => {
+    try {
+      // Call the real backend API with selected options
+      console.log('🚀 Starting analysis for:', url)
+      console.log('📱 Device Type:', deviceType)
+      console.log('🌐 Network:', networkThrottling)
+      const response = await analyzeURL(url, {
+        deviceType,
+        networkThrottling
+      })
+      
+      // Log the raw response to console for debugging
+      console.log('✅ Backend Response:', response)
+      console.log('📊 Performance Data:', JSON.stringify(response.data, null, 2))
+
       setIsAnalyzing(false)
-      // Navigate to report page with mock data
+
+      // For now, still use mock data for the report page display
+      // We'll map the real data properly in Step 2.4
       navigate('/report', {
         state: {
           reportData: {
             url: url,
-            score: 72,
+            score: 72, // Will be calculated from real data later
             webVitals: {
-              lcp: { value: 2.8, status: 'needs-improvement' },
-              fid: { value: 85, status: 'good' },
-              cls: { value: 0.12, status: 'needs-improvement' },
+              lcp: { value: response.data?.webVitals?.lcp || 2.8, status: 'needs-improvement' },
+              fid: { value: response.data?.webVitals?.fid || 85, status: 'good' },
+              cls: { value: response.data?.webVitals?.cls || 0.12, status: 'needs-improvement' },
             },
             metrics: {
-              fcp: 2.1,
-              tti: 4.5,
-              speedIndex: 3.2,
-              tbt: 350,
+              fcp: response.data?.metrics?.fcp || 2.1,
+              tti: response.data?.metrics?.tti || 4.5,
+              speedIndex: response.data?.metrics?.speedIndex || 3.2,
+              tbt: response.data?.metrics?.tbt || 350,
             },
             issues: [
               {
@@ -111,10 +128,19 @@ function LandingPage() {
                 ],
               },
             ],
+            // Include raw backend data for debugging
+            _rawBackendData: response.data
           },
         },
       })
-    }, 2000)
+    } catch (err) {
+      setIsAnalyzing(false)
+      console.error('❌ API Error:', err)
+      console.error('Error details:', err.response?.data || err.message)
+      
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to analyze URL'
+      setError(errorMessage)
+    }
   }
 
   const handleDismissError = () => {
@@ -138,6 +164,13 @@ function LandingPage() {
             onAnalyze={handleAnalyze}
             isValid={isValid}
             isAnalyzing={isAnalyzing}
+          />
+
+          <AnalysisOptions
+            deviceType={deviceType}
+            networkThrottling={networkThrottling}
+            onDeviceTypeChange={setDeviceType}
+            onNetworkThrottlingChange={setNetworkThrottling}
           />
 
           {error && (

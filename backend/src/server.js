@@ -1,6 +1,8 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import { validateURL, URLValidationError } from './services/urlValidator.js'
+import { analyzePerformance, PerformanceAnalysisError } from './services/performanceAnalyzer.js'
 
 // Load environment variables
 dotenv.config()
@@ -41,18 +43,118 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
-      analyze: '/api/analyze (coming soon)'
+      validateUrl: '/api/validate-url',
+      analyze: '/api/analyze'
     }
   })
 })
 
-// Placeholder for analyze endpoint (will be implemented in next steps)
-app.post('/api/analyze', (req, res) => {
-  res.status(501).json({
-    status: 'error',
-    message: 'Analyze endpoint not yet implemented',
-    code: 'NOT_IMPLEMENTED'
-  })
+// URL validation endpoint (for testing validation separately)
+app.post('/api/validate-url', async (req, res) => {
+  try {
+    const { url } = req.body
+
+    if (!url) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'URL is required in request body',
+        code: 'MISSING_URL'
+      })
+    }
+
+    const validationResult = await validateURL(url, {
+      timeout: 10000,
+      checkAccessibility: true
+    })
+
+    res.json({
+      status: 'success',
+      message: 'URL is valid and accessible',
+      data: validationResult
+    })
+  } catch (error) {
+    if (error instanceof URLValidationError) {
+      return res.status(error.statusCode).json({
+        status: 'error',
+        message: error.message,
+        code: error.code
+      })
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Internal server error',
+      code: 'VALIDATION_ERROR'
+    })
+  }
+})
+
+// Analyze endpoint with URL validation
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const { url } = req.body
+
+    if (!url) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'URL is required in request body',
+        code: 'MISSING_URL'
+      })
+    }
+
+    // Validate URL format and accessibility
+    const validationResult = await validateURL(url, {
+      timeout: 10000,
+      checkAccessibility: true
+    })
+
+    // URL is valid and accessible, proceed with analysis
+    console.log(`Starting performance analysis for: ${validationResult.url}`)
+    
+    // Get analysis options from request (optional)
+    const { deviceType = 'desktop', networkThrottling = '4g' } = req.body
+
+    // Run performance analysis
+    const performanceData = await analyzePerformance(validationResult.url, {
+      deviceType,
+      networkThrottling,
+      cpuThrottling: 1,
+      timeout: 60000
+    })
+
+    // Return analysis results
+    res.json({
+      status: 'success',
+      message: 'Performance analysis complete',
+      data: {
+        url: validationResult.url,
+        ...performanceData
+      }
+    })
+  } catch (error) {
+    if (error instanceof URLValidationError) {
+      return res.status(error.statusCode).json({
+        status: 'error',
+        message: error.message,
+        code: error.code
+      })
+    }
+
+    if (error instanceof PerformanceAnalysisError) {
+      return res.status(error.statusCode).json({
+        status: 'error',
+        message: error.message,
+        code: error.code
+      })
+    }
+
+    console.error('Unexpected error:', error)
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Internal server error',
+      code: 'INTERNAL_ERROR'
+    })
+  }
 })
 
 // 404 handler for undefined routes
@@ -68,7 +170,25 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error:', err)
 
-  // Handle specific error types
+  // Handle URL validation errors
+  if (err instanceof URLValidationError) {
+    return res.status(err.statusCode).json({
+      status: 'error',
+      message: err.message,
+      code: err.code
+    })
+  }
+
+  // Handle performance analysis errors
+  if (err instanceof PerformanceAnalysisError) {
+    return res.status(err.statusCode).json({
+      status: 'error',
+      message: err.message,
+      code: err.code
+    })
+  }
+
+  // Handle JSON parsing errors
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({
       status: 'error',
