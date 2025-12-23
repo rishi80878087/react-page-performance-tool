@@ -14,7 +14,18 @@ function MetricsList({ metrics }) {
       <div className="metrics-grid">
         {metricItems.map((item) => {
           const value = metrics[item.key]
-          if (value === undefined || value === null) return null
+          if (value === undefined || value === null || value < 0) {
+            // Show placeholder for invalid values
+            return (
+              <div key={item.key} className="metric-item">
+                <div className="metric-label">{item.label}</div>
+                <div className="metric-value" style={{ color: '#6B7280' }}>
+                  N/A
+                  <span className="metric-unit">{item.unit}</span>
+                </div>
+              </div>
+            )
+          }
 
           const displayValue =
             item.unit === 's' ? value.toFixed(2) : Math.round(value)

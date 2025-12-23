@@ -64,73 +64,10 @@ function LandingPage() {
 
       setIsAnalyzing(false)
 
-      // For now, still use mock data for the report page display
-      // We'll map the real data properly in Step 2.4
+      // Use processed report data from backend
       navigate('/report', {
         state: {
-          reportData: {
-            url: url,
-            score: 72, // Will be calculated from real data later
-            webVitals: {
-              lcp: { value: response.data?.webVitals?.lcp || 2.8, status: 'needs-improvement' },
-              fid: { value: response.data?.webVitals?.fid || 85, status: 'good' },
-              cls: { value: response.data?.webVitals?.cls || 0.12, status: 'needs-improvement' },
-            },
-            metrics: {
-              fcp: response.data?.metrics?.fcp || 2.1,
-              tti: response.data?.metrics?.tti || 4.5,
-              speedIndex: response.data?.metrics?.speedIndex || 3.2,
-              tbt: response.data?.metrics?.tbt || 350,
-            },
-            issues: [
-              {
-                id: 'unused-javascript',
-                title: 'Reduce unused JavaScript',
-                description:
-                  'Remove unused JavaScript to reduce bytes consumed by network activity.',
-                severity: 'critical',
-                savings: { bytes: 1800000, time: 2300 },
-                files: [
-                  {
-                    url: `${url}/static/js/bundle.js`,
-                    size: 2500000,
-                    wasted: 1800000,
-                  },
-                ],
-              },
-              {
-                id: 'unoptimized-images',
-                title: 'Optimize images',
-                description:
-                  'Optimized images can reduce page load time and save bandwidth.',
-                severity: 'warning',
-                savings: { bytes: 850000, time: 1200 },
-                files: [
-                  {
-                    url: `${url}/images/hero.jpg`,
-                    size: 1200000,
-                    wasted: 600000,
-                  },
-                ],
-              },
-              {
-                id: 'render-blocking-resources',
-                title: 'Eliminate render-blocking resources',
-                description:
-                  'Resources are blocking the first paint of your page.',
-                severity: 'warning',
-                savings: { bytes: 0, time: 800 },
-                files: [
-                  {
-                    url: `${url}/static/css/main.css`,
-                    size: 150000,
-                  },
-                ],
-              },
-            ],
-            // Include raw backend data for debugging
-            _rawBackendData: response.data
-          },
+          reportData: response.data
         },
       })
     } catch (err) {

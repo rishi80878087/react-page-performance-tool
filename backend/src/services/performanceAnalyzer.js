@@ -34,7 +34,7 @@ async function analyzePerformance(url, options = {}) {
     // Launch browser
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu']
     })
 
     // Configure browser environment with device emulation
@@ -110,7 +110,7 @@ async function analyzePerformance(url, options = {}) {
       performanceData.network.requestCount++
     })
 
-    page.on('response', async (response) => {
+    page.on('response', (response) => {
       const requestId = response.url()
       const request = networkRequests.get(requestId)
       
@@ -121,14 +121,10 @@ async function analyzePerformance(url, options = {}) {
             ? Number.parseInt(headers['content-length'], 10) 
             : 0
           
-          // Try to get actual body size if available
-          let bodySize = contentLength
-          try {
-            const body = await response.body()
-            bodySize = body.length
-          } catch (e) {
-            // Body might not be available, use content-length
-          }
+          // Use content-length header for size estimation
+          // Avoid calling response.body() as it can cause Z_BUF_ERROR crashes
+          // when decompressing incomplete gzip responses
+          const bodySize = contentLength
 
           request.status = response.status()
           request.statusText = response.statusText()
@@ -147,17 +143,20 @@ async function analyzePerformance(url, options = {}) {
       }
     })
 
-    // Track layout shifts (CLS)
-    await page.evaluateOnNewDocument(() => {
-      let clsValue = 0
-      const layoutShifts = []
+    // Track layout shifts (CLS) and LCP
+    // Use addInitScript (Playwright) instead of evaluateOnNewDocument (Puppeteer)
+    await page.addInitScript(() => {
+      // Initialize global storage for metrics
+      globalThis.__clsData = { value: 0, shifts: [] }
+      globalThis.__lcpData = { value: null, entry: null }
 
+      // Track CLS - update globalThis inside callback
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (!entry.hadRecentInput) {
             const value = entry.value
-            clsValue += value
-            layoutShifts.push({
+            globalThis.__clsData.value += value
+            globalThis.__clsData.shifts.push({
               value,
               startTime: entry.startTime,
               sources: entry.sources?.map(s => ({
@@ -170,7 +169,23 @@ async function analyzePerformance(url, options = {}) {
         }
       }).observe({ type: 'layout-shift', buffered: true })
 
-      globalThis.__clsData = { value: clsValue, shifts: layoutShifts }
+      // Track LCP - update globalThis inside callback (FIX: was setting before observer fired)
+      new PerformanceObserver((list) => {
+        const entries = list.getEntries()
+        if (entries.length > 0) {
+          // Get the last entry (largest element)
+          const lastEntry = entries[entries.length - 1]
+          // Update globalThis INSIDE the callback so it captures the actual LCP value
+          globalThis.__lcpData = {
+            value: lastEntry.renderTime || lastEntry.loadTime,
+            entry: {
+              element: lastEntry.element?.tagName || 'unknown',
+              size: lastEntry.size,
+              url: lastEntry.url || null
+            }
+          }
+        }
+      }).observe({ type: 'largest-contentful-paint', buffered: true })
     })
 
     // Track paint events
@@ -188,37 +203,102 @@ async function analyzePerformance(url, options = {}) {
     // Navigate to URL and wait for load
     const startTime = Date.now()
     
-    await page.goto(url, {   // Wait for page to fully load
-      waitUntil: 'networkidle',
+    // Navigate and wait for DOM to be ready
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded', // Wait for DOM, not network idle (more reliable)
       timeout: timeout
     })
 
-    // Wait a bit more for JavaScript execution
-    await page.waitForTimeout(2000)
+    // Wait for network to be idle (more reliable than networkidle in goto)
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 30000 })
+    } catch (e) {
+      // If network doesn't become idle, continue anyway
+      console.warn('Network did not become idle, continuing...')
+    }
+
+    // Wait for LCP to stabilize (LCP can change during page load)
+    // Poll for LCP stability - check if LCP value hasn't changed for 1 second
+    let lastLcpValue = null
+    let stableCount = 0
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(500) // Check every 500ms
+      const currentLcp = await page.evaluate(() => {
+        const entries = performance.getEntriesByType('largest-contentful-paint')
+        if (entries.length > 0) {
+          const lastEntry = entries[entries.length - 1]
+          return lastEntry.renderTime || lastEntry.loadTime
+        }
+        return null
+      })
+      
+      if (currentLcp === lastLcpValue && currentLcp !== null) {
+        stableCount++
+        if (stableCount >= 2) {
+          // LCP has been stable for 1 second, we can proceed
+          break
+        }
+      } else {
+        stableCount = 0
+        lastLcpValue = currentLcp
+      }
+    }
+
+    // Final wait to ensure all metrics are collected
+    await page.waitForTimeout(1000)
 
     const loadTime = Date.now() - startTime
 
     // Collect performance timing data
+    // Performance Navigation Timing API: All values are relative to navigationStart
     const timing = await page.evaluate(() => {
       const perf = performance.getEntriesByType('navigation')[0]
       if (!perf) return {}
 
+      // navigationStart is the reference point (timestamp when navigation started)
+      // All other timing values are ALREADY relative to navigationStart
+      // We should use them directly - they're already in milliseconds relative to navigationStart
+      
+      const navigationStart = perf.navigationStart || perf.fetchStart || 0
+
+      // In Performance Navigation Timing API:
+      // - navigationStart is a timestamp (when navigation started, e.g., Date.now())
+      // - All other values (domInteractive, loadEventEnd, etc.) are ALSO timestamps
+      // - To get relative time in milliseconds, we subtract: timestamp - navigationStart
+      const getRelativeTime = (timestamp) => {
+        if (!timestamp || timestamp === 0) return null
+        
+        // If navigationStart is 0, values might already be relative
+        if (navigationStart === 0) {
+          // Values are already relative, just validate range
+          if (timestamp < 0 || timestamp > 600000) return null
+          return timestamp
+        }
+        
+        // Calculate relative time: timestamp - navigationStart
+        const relative = timestamp - navigationStart
+        
+        // Validate: should be positive and reasonable (less than 10 minutes = 600000ms)
+        if (relative < 0 || relative > 600000) return null
+        return relative
+      }
+
       return {
-        navigationStart: perf.fetchStart,
-        domContentLoaded: perf.domContentLoadedEventEnd - perf.fetchStart,
-        loadComplete: perf.loadEventEnd - perf.fetchStart,
+        navigationStart: navigationStart,
+        domContentLoaded: getRelativeTime(perf.domContentLoadedEventEnd),
+        loadComplete: getRelativeTime(perf.loadEventEnd),
         dns: perf.domainLookupEnd - perf.domainLookupStart,
         connect: perf.connectEnd - perf.connectStart,
         request: perf.responseStart - perf.requestStart,
         response: perf.responseEnd - perf.responseStart,
-        domInteractive: perf.domInteractive - perf.fetchStart,
-        domComplete: perf.domComplete - perf.fetchStart
+        domInteractive: getRelativeTime(perf.domInteractive),
+        domComplete: getRelativeTime(perf.domComplete)
       }
     })
 
     performanceData.timing = timing
 
-    // Collect Core Web Vitals
+    // Collect Core Web Vitals - get buffered entries after page load
     const webVitals = await page.evaluate(() => {
       const vitals = {
         lcp: null,
@@ -226,21 +306,23 @@ async function analyzePerformance(url, options = {}) {
         cls: globalThis.__clsData?.value || 0
       }
 
-      // Get LCP
-      new PerformanceObserver((list) => {
-        const entries = list.getEntries()
-        if (entries.length > 0) {
-          const lastEntry = entries[entries.length - 1]
-          vitals.lcp = lastEntry.renderTime || lastEntry.loadTime
-        }
-      }).observe({ type: 'largest-contentful-paint', buffered: true })
+      // Get LCP from buffered entries (most reliable method)
+      const lcpEntries = performance.getEntriesByType('largest-contentful-paint')
+      if (lcpEntries.length > 0) {
+        // Get the last entry (final LCP candidate)
+        const lastEntry = lcpEntries.at(-1)
+        vitals.lcp = lastEntry.renderTime || lastEntry.loadTime
+      } else {
+        // Fallback to observer data if buffered entries not available
+        vitals.lcp = globalThis.__lcpData?.value || null
+      }
 
-      // Get FID (requires user interaction, so might be null)
-      new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          vitals.fid = entry.processingStart - entry.startTime
-        }
-      }).observe({ type: 'first-input', buffered: true })
+      // Get FID from buffered entries (requires user interaction, so might be null)
+      const fidEntries = performance.getEntriesByType('first-input')
+      if (fidEntries.length > 0) {
+        const entry = fidEntries[0]
+        vitals.fid = entry.processingStart - entry.startTime
+      }
 
       return vitals
     })
@@ -282,16 +364,32 @@ async function analyzePerformance(url, options = {}) {
     performanceData.rendering.paints = paints
 
     // Calculate FCP (First Contentful Paint)
+    // FCP startTime is relative to navigationStart, in milliseconds
     const fcpEntry = paints.find(p => p.name === 'first-contentful-paint')
-    if (fcpEntry) {
-      metrics.fcp = fcpEntry.startTime / 1000 // Convert to seconds
+    if (fcpEntry && fcpEntry.startTime && fcpEntry.startTime > 0) {
+      // startTime is in milliseconds relative to navigationStart
+      // Ensure it's a valid positive value
+      const fcpMs = fcpEntry.startTime
+      if (fcpMs > 0 && fcpMs < 60000) { // Reasonable range: 0-60 seconds in milliseconds
+        // Store in milliseconds - will be converted to seconds in reportProcessor
+        metrics.fcp = fcpMs
+      }
     }
 
     // Set web vitals
+    // LCP renderTime/loadTime is in milliseconds relative to navigationStart
+    // Keep in milliseconds for now, will be normalized in reportProcessor
+    // Validate LCP value is reasonable
+    let lcpValue = null
+    if (webVitals.lcp && webVitals.lcp > 0 && webVitals.lcp < 600000) {
+      // Ensure LCP is reasonable (less than 10 minutes in milliseconds)
+      lcpValue = webVitals.lcp // Keep in milliseconds
+    }
+
     performanceData.webVitals = {
-      lcp: webVitals.lcp ? webVitals.lcp / 1000 : null, // Convert to seconds
-      fid: webVitals.fid, // Already in milliseconds
-      cls: performanceData.webVitals.cls
+      lcp: lcpValue,
+      fid: webVitals.fid && webVitals.fid > 0 && webVitals.fid < 10000 ? webVitals.fid : null, // FID in milliseconds, validate range
+      cls: performanceData.webVitals.cls // CLS is a score, not time
     }
 
     performanceData.metrics = metrics
@@ -391,18 +489,26 @@ function calculateMetrics(timing, webVitals, loadTime) {
   }
 
   // Calculate TTI (simplified - time when DOM is interactive)
-  if (timing.domInteractive) {
+  // timing.domInteractive is in milliseconds relative to navigationStart
+  if (timing.domInteractive && timing.domInteractive > 0 && timing.domInteractive < 600000) {
+    // Ensure value is reasonable (less than 10 minutes)
     metrics.tti = timing.domInteractive / 1000 // Convert to seconds
   }
 
-  // Calculate Speed Index (simplified - based on load time)
-  // Real Speed Index requires screenshots, this is an approximation
-  if (timing.loadComplete) {
+  // Calculate Speed Index (simplified approximation)
+  // Real Speed Index requires screenshots and visual analysis
+  // This is a simplified version using loadComplete time
+  // Note: This is NOT accurate Speed Index, just an approximation
+  if (timing.loadComplete && timing.loadComplete > 0 && timing.loadComplete < 600000) {
+    // Ensure value is reasonable (less than 10 minutes)
     metrics.speedIndex = timing.loadComplete / 1000 // Convert to seconds
+  } else if (timing.domContentLoaded && timing.domContentLoaded > 0 && timing.domContentLoaded < 600000) {
+    // Fallback to domContentLoaded if loadComplete is not available
+    metrics.speedIndex = timing.domContentLoaded / 1000
   }
 
-  // TBT calculation would require long task tracking
-  // For now, set to 0 (will be enhanced later)
+  // TBT calculation would require long task tracking via Performance Observer
+  // For now, set to 0 (will be enhanced later with long task tracking)
   metrics.tbt = 0
 
   return metrics

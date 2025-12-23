@@ -8,7 +8,18 @@ import './ReportPage.css'
 function ReportPage() {
   const location = useLocation()
   const navigate = useNavigate()
+  
+  // Debug: Log what we're receiving
+  console.log('📍 ReportPage - location.state:', location.state)
+  console.log('📍 ReportPage - reportData:', location.state?.reportData)
+  
   const reportData = location.state?.reportData || getMockData()
+  
+  // Debug: Log final reportData
+  console.log('📍 ReportPage - Final reportData:', reportData)
+  console.log('📍 ReportPage - score:', reportData?.score)
+  console.log('📍 ReportPage - webVitals:', reportData?.webVitals)
+  console.log('📍 ReportPage - metrics:', reportData?.metrics)
 
   const handleNewAnalysis = () => {
     navigate('/')
@@ -25,6 +36,26 @@ function ReportPage() {
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
+  }
+
+  // Safety check: Ensure we have valid data
+  if (!reportData) {
+    console.error('❌ ReportPage: No reportData available')
+    return (
+      <div className="report-page" style={{ minHeight: '100vh', padding: '20px' }}>
+        <div className="report-container">
+          <div className="report-header">
+            <h1 className="report-title">Error</h1>
+            <p style={{ color: '#EF4444', marginTop: '10px' }}>
+              No report data available. Please run a new analysis.
+            </p>
+            <button className="action-button primary" onClick={handleNewAnalysis} style={{ marginTop: '20px' }}>
+              New Analysis
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -49,15 +80,15 @@ function ReportPage() {
 
         <div className="report-content">
           <div className="report-section">
-            <ScoreCard score={reportData.score} />
+            <ScoreCard score={reportData.score || 0} />
           </div>
 
           <div className="report-section">
-            <WebVitalsCard webVitals={reportData.webVitals} />
+            <WebVitalsCard webVitals={reportData.webVitals || {}} />
           </div>
 
           <div className="report-section">
-            <MetricsList metrics={reportData.metrics} />
+            <MetricsList metrics={reportData.metrics || {}} />
           </div>
 
           <div className="report-section">

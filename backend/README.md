@@ -107,3 +107,5 @@ backend/
 - CORS is configured to allow requests from the frontend
 - Health check endpoint is ready for monitoring
 
+
+

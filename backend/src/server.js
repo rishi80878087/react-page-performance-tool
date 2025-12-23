@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { validateURL, URLValidationError } from './services/urlValidator.js'
 import { analyzePerformance, PerformanceAnalysisError } from './services/performanceAnalyzer.js'
+import { processReport } from './services/reportProcessor.js'
 
 // Load environment variables
 dotenv.config()
@@ -103,8 +104,9 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     // Validate URL format and accessibility
+    // Increased timeout to 30 seconds for slow-loading pages
     const validationResult = await validateURL(url, {
-      timeout: 10000,
+      timeout: 30000, // 30 seconds (increased from 10)
       checkAccessibility: true
     })
 
@@ -115,21 +117,24 @@ app.post('/api/analyze', async (req, res) => {
     const { deviceType = 'desktop', networkThrottling = '4g' } = req.body
 
     // Run performance analysis
-    const performanceData = await analyzePerformance(validationResult.url, {
+    const rawPerformanceData = await analyzePerformance(validationResult.url, {
       deviceType,
       networkThrottling,
       cpuThrottling: 1,
       timeout: 60000
     })
 
-    // Return analysis results
+    // Add URL to raw data for processing
+    rawPerformanceData.url = validationResult.url
+
+    // Process raw data into structured report
+    const processedReport = processReport(rawPerformanceData)
+
+    // Return processed report
     res.json({
       status: 'success',
       message: 'Performance analysis complete',
-      data: {
-        url: validationResult.url,
-        ...performanceData
-      }
+      data: processedReport
     })
   } catch (error) {
     if (error instanceof URLValidationError) {
@@ -222,4 +227,18 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server')
   process.exit(0)
+})
+
+// Handle uncaught exceptions to prevent server crashes from Playwright/zlib errors
+process.on('uncaughtException', (error) => {
+  // Ignore zlib decompression errors from Playwright's internal response handling
+  if (error.code === 'Z_BUF_ERROR' || error.message?.includes('unexpected end of file')) {
+    console.warn('Caught zlib error (ignoring):', error.message)
+    return
+  }
+  console.error('Uncaught Exception:', error)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
 })
