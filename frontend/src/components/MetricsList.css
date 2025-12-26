@@ -52,6 +52,15 @@
   margin-left: 4px;
 }
 
+.metric-status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
 @media (max-width: 768px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);

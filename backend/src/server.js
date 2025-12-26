@@ -12,9 +12,14 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
-// Middleware
+// Middleware - Allow multiple frontend origins
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: [
+    FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173', // Vite default port
+  ],
   credentials: true
 }))
 
@@ -114,18 +119,24 @@ app.post('/api/analyze', async (req, res) => {
     console.log(`Starting performance analysis for: ${validationResult.url}`)
     
     // Get analysis options from request (optional)
-    const { deviceType = 'desktop', networkThrottling = '4g' } = req.body
+    const { deviceType = 'desktop', networkThrottling = '4g', auth = null } = req.body
+
+    // Log auth info if provided
+    if (auth) {
+      console.log(`🔒 Authentication enabled (type: ${auth.type})`)
+    }
 
     // Run performance analysis
     const rawPerformanceData = await analyzePerformance(validationResult.url, {
       deviceType,
       networkThrottling,
+      auth, // Pass auth data for authenticated page analysis
       cpuThrottling: 1,
       timeout: 60000
     })
 
-    // Add URL to raw data for processing
-    rawPerformanceData.url = validationResult.url
+    // Add original URL to raw data for processing (for redirect detection)
+    rawPerformanceData.originalUrl = validationResult.url
 
     // Process raw data into structured report
     const processedReport = processReport(rawPerformanceData)

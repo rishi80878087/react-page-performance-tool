@@ -27,19 +27,10 @@ function WebVitalsCard({ webVitals }) {
     }
   }
 
-  const formatValue = (metric, value) => {
-    if (value === null || value === undefined || Number.isNaN(value)) return 'N/A'
-    const numValue = Number(value)
-    if (Number.isNaN(numValue)) return 'N/A'
-    if (metric === 'lcp') return `${numValue.toFixed(2)}s`
-    if (metric === 'fid') return `${Math.round(numValue)}ms`
-    if (metric === 'cls') return numValue.toFixed(3)
-    return String(value)
-  }
-
+  // INP replaced FID as Core Web Vital in March 2024
   const vitals = [
     { key: 'lcp', label: 'LCP', description: 'Largest Contentful Paint' },
-    { key: 'fid', label: 'FID', description: 'First Input Delay' },
+    { key: 'inp', label: 'INP', description: 'Interaction to Next Paint' },
     { key: 'cls', label: 'CLS', description: 'Cumulative Layout Shift' },
   ]
 
@@ -49,12 +40,11 @@ function WebVitalsCard({ webVitals }) {
       <div className="web-vitals-grid">
         {vitals.map((vital) => {
           const data = webVitals?.[vital.key]
-          const value = data?.value
-          // Check if value is null, undefined, or NaN
-          const hasValidValue = value !== null && value !== undefined && value !== '' && !Number.isNaN(Number(value))
           
-          if (!data || !hasValidValue) {
-            // Show placeholder if data is missing
+          // Handle both old format (value as number) and new format (object with valueFormatted)
+          const hasData = data && (data.value !== null && data.value !== undefined)
+          
+          if (!hasData) {
             return (
               <div key={vital.key} className="vital-item">
                 <div className="vital-header">
@@ -63,18 +53,24 @@ function WebVitalsCard({ webVitals }) {
                     <p className="vital-description">{vital.description}</p>
                   </div>
                   <span className="vital-status" style={{ color: '#6B7280', backgroundColor: '#F3F4F6' }}>
-                    {data?.status || 'N/A'}
+                    Unknown
                   </span>
                 </div>
                 <div className="vital-value" style={{ color: '#6B7280' }}>
                   N/A
                 </div>
+                {data?.note && (
+                  <p className="vital-note">{data.note}</p>
+                )}
               </div>
             )
           }
 
           const statusColor = getStatusColor(data.status || 'unknown')
           const statusLabel = getStatusLabel(data.status || 'unknown')
+          
+          // Use displayValue if available (Lighthouse format), otherwise format the value
+          const displayValue = data.displayValue || data.valueFormatted || formatValue(vital.key, data.value)
 
           return (
             <div key={vital.key} className="vital-item">
@@ -94,14 +90,36 @@ function WebVitalsCard({ webVitals }) {
                 </span>
               </div>
               <div className="vital-value" style={{ color: statusColor }}>
-                {formatValue(vital.key, data.value)}
+                {displayValue}
               </div>
+              {data.note && (
+                <p className="vital-note">{data.note}</p>
+              )}
             </div>
           )
         })}
       </div>
     </div>
   )
+}
+
+// Fallback formatter for old format
+function formatValue(metric, value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return 'N/A'
+  const numValue = Number(value)
+  if (Number.isNaN(numValue)) return 'N/A'
+  
+  if (metric === 'lcp') {
+    // LCP might be in ms (Lighthouse) or seconds (old format)
+    if (numValue > 100) {
+      // Probably milliseconds
+      return `${(numValue / 1000).toFixed(1)} s`
+    }
+    return `${numValue.toFixed(2)} s`
+  }
+  if (metric === 'inp') return `${Math.round(numValue)} ms`
+  if (metric === 'cls') return numValue.toFixed(3)
+  return String(value)
 }
 
 export default WebVitalsCard

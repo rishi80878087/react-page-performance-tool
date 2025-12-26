@@ -4,6 +4,7 @@ import URLInput from '../components/URLInput'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import AnalysisOptions from '../components/AnalysisOptions'
+import AuthOptions from '../components/AuthOptions'
 import { analyzeURL } from '../services/api'
 import './LandingPage.css'
 
@@ -15,6 +16,8 @@ function LandingPage() {
   const [error, setError] = useState('')
   const [deviceType, setDeviceType] = useState('desktop')
   const [networkThrottling, setNetworkThrottling] = useState('4g')
+  const [authEnabled, setAuthEnabled] = useState(false)
+  const [authData, setAuthData] = useState(null)
 
   const validateURL = (urlString) => {
     if (!urlString.trim()) {
@@ -53,9 +56,13 @@ function LandingPage() {
       console.log('🚀 Starting analysis for:', url)
       console.log('📱 Device Type:', deviceType)
       console.log('🌐 Network:', networkThrottling)
+      console.log('🔒 Auth Enabled:', authEnabled)
+      if (authData) console.log('🔑 Auth Type:', authData.type)
+      
       const response = await analyzeURL(url, {
         deviceType,
-        networkThrottling
+        networkThrottling,
+        auth: authEnabled ? authData : null
       })
       
       // Log the raw response to console for debugging
@@ -108,6 +115,13 @@ function LandingPage() {
             networkThrottling={networkThrottling}
             onDeviceTypeChange={setDeviceType}
             onNetworkThrottlingChange={setNetworkThrottling}
+          />
+
+          <AuthOptions
+            authEnabled={authEnabled}
+            authData={authData}
+            onAuthEnabledChange={setAuthEnabled}
+            onAuthDataChange={setAuthData}
           />
 
           {error && (
