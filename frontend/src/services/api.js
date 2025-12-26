@@ -20,16 +20,30 @@ const api = axios.create({
  * Analyze URL performance
  * @param {string} url - URL to analyze
  * @param {Object} options - Analysis options
+ * @param {string} options.deviceType - Device type (desktop/mobile)
+ * @param {string} options.networkThrottling - Network throttling setting
+ * @param {Object} options.auth - Authentication data (optional)
  * @returns {Promise<Object>} Performance analysis result
  */
 export async function analyzeURL(url, options = {}) {
-  const { deviceType = 'desktop', networkThrottling = '4g' } = options
+  const { 
+    deviceType = 'desktop', 
+    networkThrottling = '4g',
+    auth = null 
+  } = options
 
-  const response = await api.post('/analyze', {
+  const requestBody = {
     url,
     deviceType,
     networkThrottling
-  })
+  }
+
+  // Add auth data if provided
+  if (auth) {
+    requestBody.auth = auth
+  }
+
+  const response = await api.post('/analyze', requestBody)
 
   return response.data
 }

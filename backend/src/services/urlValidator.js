@@ -86,19 +86,38 @@ function validateURLFormat(urlString) {
  * @param {number} timeout - Timeout in milliseconds (default: 10000)
  * @returns {Promise<Object>} { isAccessible: boolean, error?: string, statusCode?: number }
  */
-async function checkURLAccessibility(url, timeout = 10000) {
+async function checkURLAccessibility(url, timeout = 30000) {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    const response = await fetch(url, {
-      method: 'HEAD', // Use HEAD to avoid downloading full content
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PagePerformanceTool/1.0)'
+    // Try HEAD first (faster), fallback to GET if HEAD fails or is not supported
+    let response
+    try {
+      response = await fetch(url, {
+        method: 'HEAD', // Use HEAD to avoid downloading full content
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      })
+    } catch (headError) {
+      // If HEAD fails (not supported or other error), try GET
+      if (headError.name === 'AbortError') {
+        throw headError // Re-throw timeout errors immediately
       }
-    })
+      // Some servers don't support HEAD, try GET instead
+      response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Range': 'bytes=0-1024' // Only request first 1KB to save bandwidth
+        }
+      })
+    }
 
     clearTimeout(timeoutId)
 
@@ -163,7 +182,7 @@ async function checkURLAccessibility(url, timeout = 10000) {
  */
 async function validateURL(urlString, options = {}) {
   const {
-    timeout = 10000,
+    timeout = 30000, // 30 seconds default (increased from 10)
     checkAccessibility = true
   } = options
 

@@ -65,6 +65,13 @@
   line-height: 1;
 }
 
+.vital-note {
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 8px 0 0 0;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .web-vitals-grid {
     grid-template-columns: 1fr;

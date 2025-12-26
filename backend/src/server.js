@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { validateURL, URLValidationError } from './services/urlValidator.js'
 import { analyzePerformance, PerformanceAnalysisError } from './services/performanceAnalyzer.js'
+import { processReport } from './services/reportProcessor.js'
 
 // Load environment variables
 dotenv.config()
@@ -11,9 +12,14 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
-// Middleware
+// Middleware - Allow multiple frontend origins
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: [
+    FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173', // Vite default port
+  ],
   credentials: true
 }))
 
@@ -103,8 +109,9 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     // Validate URL format and accessibility
+    // Increased timeout to 30 seconds for slow-loading pages
     const validationResult = await validateURL(url, {
-      timeout: 10000,
+      timeout: 30000, // 30 seconds (increased from 10)
       checkAccessibility: true
     })
 
@@ -112,24 +119,33 @@ app.post('/api/analyze', async (req, res) => {
     console.log(`Starting performance analysis for: ${validationResult.url}`)
     
     // Get analysis options from request (optional)
-    const { deviceType = 'desktop', networkThrottling = '4g' } = req.body
+    const { deviceType = 'desktop', networkThrottling = '4g', auth = null } = req.body
+
+    // Log auth info if provided
+    if (auth) {
+      console.log(`🔒 Authentication enabled (type: ${auth.type})`)
+    }
 
     // Run performance analysis
-    const performanceData = await analyzePerformance(validationResult.url, {
+    const rawPerformanceData = await analyzePerformance(validationResult.url, {
       deviceType,
       networkThrottling,
+      auth, // Pass auth data for authenticated page analysis
       cpuThrottling: 1,
       timeout: 60000
     })
 
-    // Return analysis results
+    // Add original URL to raw data for processing (for redirect detection)
+    rawPerformanceData.originalUrl = validationResult.url
+
+    // Process raw data into structured report
+    const processedReport = processReport(rawPerformanceData)
+
+    // Return processed report
     res.json({
       status: 'success',
       message: 'Performance analysis complete',
-      data: {
-        url: validationResult.url,
-        ...performanceData
-      }
+      data: processedReport
     })
   } catch (error) {
     if (error instanceof URLValidationError) {
@@ -222,4 +238,18 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server')
   process.exit(0)
+})
+
+// Handle uncaught exceptions to prevent server crashes from Playwright/zlib errors
+process.on('uncaughtException', (error) => {
+  // Ignore zlib decompression errors from Playwright's internal response handling
+  if (error.code === 'Z_BUF_ERROR' || error.message?.includes('unexpected end of file')) {
+    console.warn('Caught zlib error (ignoring):', error.message)
+    return
+  }
+  console.error('Uncaught Exception:', error)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
 })

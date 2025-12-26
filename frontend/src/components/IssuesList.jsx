@@ -41,14 +41,16 @@ function IssuesList({ issues }) {
   }
 
   const formatBytes = (bytes) => {
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(2)} MB`
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(2)} KB`
+    if (!bytes || bytes === 0) return null
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${bytes} B`
   }
 
   const formatTime = (ms) => {
-    if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
-    return `${ms}ms`
+    if (!ms || ms === 0) return null
+    if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
+    return `${Math.round(ms)}ms`
   }
 
   // Group issues by severity
@@ -63,6 +65,11 @@ function IssuesList({ issues }) {
     const severityColor = getSeverityColor(issue.severity)
     const severityIcon = getSeverityIcon(issue.severity)
 
+    // Support both new format (with timeFormatted/bytesFormatted) and old format
+    const savings = issue.savings || {}
+    const timeSavings = savings.timeFormatted || formatTime(savings.time)
+    const byteSavings = savings.bytesFormatted || formatBytes(savings.bytes)
+
     return (
       <div key={issue.id} className="issue-item">
         <div
@@ -72,24 +79,24 @@ function IssuesList({ issues }) {
         >
           <div className="issue-header-left">
             <span className="issue-icon">{severityIcon}</span>
-            <div>
+            <div className="issue-info">
               <h3 className="issue-title">{issue.title}</h3>
-              {issue.description && (
-                <p className="issue-description">{issue.description}</p>
+              {issue.displayValue && (
+                <span className="issue-display-value">{issue.displayValue}</span>
               )}
             </div>
           </div>
           <div className="issue-header-right">
-            {issue.savings && (
+            {(timeSavings || byteSavings) && (
               <div className="issue-savings">
-                {issue.savings.bytes && (
-                  <span className="savings-item">
-                    Save {formatBytes(issue.savings.bytes)}
+                {byteSavings && (
+                  <span className="savings-item savings-bytes">
+                    💾 {byteSavings}
                   </span>
                 )}
-                {issue.savings.time && (
-                  <span className="savings-item">
-                    Save {formatTime(issue.savings.time)}
+                {timeSavings && (
+                  <span className="savings-item savings-time">
+                    ⏱️ {timeSavings}
                   </span>
                 )}
               </div>
@@ -101,6 +108,9 @@ function IssuesList({ issues }) {
         </div>
         {isExpanded && (
           <div className="issue-details">
+            {issue.description && (
+              <p className="issue-full-description">{issue.description}</p>
+            )}
             {issue.files && issue.files.length > 0 && (
               <div className="issue-files">
                 <h4 className="issue-files-title">Affected Files:</h4>

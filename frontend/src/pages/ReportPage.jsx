@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import ScoreCard from '../components/ScoreCard'
 import WebVitalsCard from '../components/WebVitalsCard'
@@ -8,14 +9,32 @@ import './ReportPage.css'
 function ReportPage() {
   const location = useLocation()
   const navigate = useNavigate()
+  const [showScreenshot, setShowScreenshot] = useState(false)
+  
+  // Debug: Log what we're receiving
+  console.log('📍 ReportPage - location.state:', location.state)
+  console.log('📍 ReportPage - reportData:', location.state?.reportData)
+  
   const reportData = location.state?.reportData || getMockData()
+  
+  // Debug: Log final reportData
+  console.log('📍 ReportPage - Final reportData:', reportData)
+  console.log('📍 ReportPage - score:', reportData?.score)
+  console.log('📍 ReportPage - webVitals:', reportData?.webVitals)
+  console.log('📍 ReportPage - metrics:', reportData?.metrics)
 
   const handleNewAnalysis = () => {
     navigate('/')
   }
 
   const handleDownloadReport = () => {
-    const dataStr = JSON.stringify(reportData, null, 2)
+    // Create a clean copy without the large base64 screenshot
+    const reportForDownload = { ...reportData }
+    if (reportForDownload.screenshot) {
+      reportForDownload.screenshot = '[Screenshot available in UI - excluded from download to reduce file size]'
+    }
+    
+    const dataStr = JSON.stringify(reportForDownload, null, 2)
     const dataBlob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement('a')
@@ -25,6 +44,48 @@ function ReportPage() {
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadScreenshot = () => {
+    if (!reportData.screenshot) return
+    
+    // Convert base64 to blob and download
+    const byteCharacters = atob(reportData.screenshot)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const byteArray = new Uint8Array(byteNumbers)
+    const blob = new Blob([byteArray], { type: 'image/jpeg' })
+    
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `screenshot-${Date.now()}.jpg`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  // Safety check: Ensure we have valid data
+  if (!reportData) {
+    console.error('❌ ReportPage: No reportData available')
+    return (
+      <div className="report-page" style={{ minHeight: '100vh', padding: '20px' }}>
+        <div className="report-container">
+          <div className="report-header">
+            <h1 className="report-title">Error</h1>
+            <p style={{ color: '#EF4444', marginTop: '10px' }}>
+              No report data available. Please run a new analysis.
+            </p>
+            <button className="action-button primary" onClick={handleNewAnalysis} style={{ marginTop: '20px' }}>
+              New Analysis
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -47,17 +108,90 @@ function ReportPage() {
           </div>
         </div>
 
+        {/* URL Redirect Warning */}
+        {reportData.urlRedirect?.detected && (
+          <div className="redirect-warning">
+            <div className="redirect-warning-icon">⚠️</div>
+            <div className="redirect-warning-content">
+              <h3>Page Redirect Detected</h3>
+              <p>{reportData.urlRedirect.warning}</p>
+              <div className="redirect-urls">
+                <div className="redirect-url-item">
+                  <span className="redirect-label">Requested:</span>
+                  <code>{reportData.urlRedirect.from}</code>
+                </div>
+                <div className="redirect-url-item">
+                  <span className="redirect-label">Analyzed:</span>
+                  <code>{reportData.urlRedirect.to}</code>
+                </div>
+              </div>
+              <p className="redirect-hint">
+                💡 If you expected to analyze a protected page, please re-export your session and try again.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Analysis Verified Badge */}
+        {!reportData.urlRedirect?.detected && reportData.originalUrl && (
+          <div className="analysis-verified">
+            ✅ Page analyzed: <code>{reportData.url}</code>
+          </div>
+        )}
+
+        {/* Screenshot Preview */}
+        {reportData.screenshot && (
+          <div className="screenshot-section">
+            <button 
+              className="screenshot-toggle"
+              onClick={() => setShowScreenshot(!showScreenshot)}
+            >
+              <span className="screenshot-toggle-icon">{showScreenshot ? '▼' : '▶'}</span>
+              <span>📸 View Analyzed Page Screenshot</span>
+            </button>
+            
+            {showScreenshot && (
+              <div className="screenshot-preview">
+                <div className="screenshot-header">
+                  <p className="screenshot-hint">
+                    This screenshot shows the actual page that was analyzed.
+                  </p>
+                  <button 
+                    className="screenshot-download-btn"
+                    onClick={handleDownloadScreenshot}
+                  >
+                    💾 Download Screenshot
+                  </button>
+                </div>
+                <div 
+                  className="screenshot-container"
+                  onClick={() => window.open(`data:image/jpeg;base64,${reportData.screenshot}`, '_blank')}
+                >
+                  <img 
+                    src={`data:image/jpeg;base64,${reportData.screenshot}`} 
+                    alt="Analyzed page screenshot"
+                    className="screenshot-image"
+                  />
+                  <div className="screenshot-overlay">
+                    🔍 Click to open full size
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="report-content">
           <div className="report-section">
-            <ScoreCard score={reportData.score} />
+            <ScoreCard score={reportData.score || 0} />
           </div>
 
           <div className="report-section">
-            <WebVitalsCard webVitals={reportData.webVitals} />
+            <WebVitalsCard webVitals={reportData.webVitals || {}} />
           </div>
 
           <div className="report-section">
-            <MetricsList metrics={reportData.metrics} />
+            <MetricsList metrics={reportData.metrics || {}} />
           </div>
 
           <div className="report-section">
