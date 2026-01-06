@@ -1,125 +1,183 @@
+import { useState } from 'react'
 import './WebVitalsCard.css'
 
+const vitalInfo = {
+  lcp: {
+    description: 'Measures loading performance. Reports render time of largest content element.',
+    scale: [
+      { label: 'Good', range: '≤ 2.5s', color: '#22c55e' },
+      { label: 'Moderate', range: '2.5s – 4.0s', color: '#f59e0b' },
+      { label: 'Poor', range: '> 4.0s', color: '#ef4444' }
+    ]
+  },
+  cls: {
+    description: 'Measures visual stability. CLS quantifies how much elements shift around during page load.',
+    scale: [
+      { label: 'Good', range: '≤ 0.1', color: '#22c55e' },
+      { label: 'Moderate', range: '0.1 - 0.25', color: '#f59e0b' },
+      { label: 'Poor', range: '> 0.25', color: '#ef4444' }
+    ]
+  }
+}
+
+function InfoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 16v-4M12 8h.01"/>
+    </svg>
+  )
+}
+
+function formatValue(key, value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'N/A'
+  }
+  const numValue = Number(value)
+  if (key === 'cls') {
+    return numValue.toFixed(3)
+  }
+  if (numValue > 100) {
+    return `${(numValue / 1000).toFixed(1)} s`
+  }
+  return `${numValue.toFixed(1)} s`
+}
+
 function WebVitalsCard({ webVitals }) {
-  const getStatusColor = (status) => {
+  const [activeTooltip, setActiveTooltip] = useState(null)
+
+  const getStatusInfo = (status, hasData) => {
+    if (!hasData) {
+      return { label: 'N/A', class: 'unknown' }
+    }
     switch (status) {
       case 'good':
-        return '#10B981'
+        return { label: 'GOOD', class: 'good' }
       case 'needs-improvement':
-        return '#F59E0B'
+        return { label: 'MODERATE', class: 'moderate' }
       case 'poor':
-        return '#EF4444'
+        return { label: 'POOR', class: 'poor' }
       default:
-        return '#6B7280'
+        return { label: 'N/A', class: 'unknown' }
     }
   }
 
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'good':
-        return 'Good'
-      case 'needs-improvement':
-        return 'Needs Improvement'
-      case 'poor':
-        return 'Poor'
-      default:
-        return 'Unknown'
-    }
-  }
-
-  // INP replaced FID as Core Web Vital in March 2024
   const vitals = [
-    { key: 'lcp', label: 'LCP', description: 'Largest Contentful Paint' },
-    { key: 'inp', label: 'INP', description: 'Interaction to Next Paint' },
-    { key: 'cls', label: 'CLS', description: 'Cumulative Layout Shift' },
+    { 
+      key: 'lcp', 
+      label: 'LCP', 
+      fullName: 'Largest Contentful Paint',
+      unit: 's',
+      thresholds: { good: 2.5, poor: 4.0 }
+    },
+    { 
+      key: 'cls', 
+      label: 'CLS', 
+      fullName: 'Cumulative Layout Shift',
+      unit: '',
+      thresholds: { good: 0.1, poor: 0.25 }
+    },
   ]
 
   return (
-    <div className="web-vitals-card">
-      <h2 className="web-vitals-title">Core Web Vitals</h2>
-      <div className="web-vitals-grid">
+    <div className="vitals-card card">
+      <div className="section-header">
+        <h2 className="section-title">Core Web Vitals</h2>
+        <p className="section-subtitle">Critical metrics that impact user experience</p>
+      </div>
+      
+      <div className="vitals-grid">
         {vitals.map((vital) => {
           const data = webVitals?.[vital.key]
+          const hasData = data && data.value !== null && data.value !== undefined
+          const statusInfo = getStatusInfo(data?.status, hasData)
           
-          // Handle both old format (value as number) and new format (object with valueFormatted)
-          const hasData = data && (data.value !== null && data.value !== undefined)
+          let displayValue = '—'
+          if (hasData) {
+            const rawValue = data.displayValue || formatValue(vital.key, data.value)
+            const timeMatch = rawValue?.match?.(/([\d,.]+)\s*(ms|s)/i)
+            displayValue = timeMatch ? `${timeMatch[1]} ${timeMatch[2]}` : rawValue
+          }
           
-          if (!hasData) {
-            return (
-              <div key={vital.key} className="vital-item">
-                <div className="vital-header">
-                  <div>
-                    <h3 className="vital-label">{vital.label}</h3>
-                    <p className="vital-description">{vital.description}</p>
-                  </div>
-                  <span className="vital-status" style={{ color: '#6B7280', backgroundColor: '#F3F4F6' }}>
-                    Unknown
-                  </span>
-                </div>
-                <div className="vital-value" style={{ color: '#6B7280' }}>
-                  N/A
-                </div>
-                {data?.note && (
-                  <p className="vital-note">{data.note}</p>
-                )}
-              </div>
-            )
+          const getProgressPercent = () => {
+            if (!hasData) return 0
+            const { good, poor } = vital.thresholds
+            let value = Number(data.value)
+            
+            if (vital.key === 'lcp' && value > 100) {
+              value = value / 1000
+            }
+            
+            if (value <= good) return (value / good) * 33
+            if (value <= poor) return 33 + ((value - good) / (poor - good)) * 33
+            return 66 + Math.min(((value - poor) / poor) * 34, 34)
           }
 
-          const statusColor = getStatusColor(data.status || 'unknown')
-          const statusLabel = getStatusLabel(data.status || 'unknown')
-          
-          // Use displayValue if available (Lighthouse format), otherwise format the value
-          const displayValue = data.displayValue || data.valueFormatted || formatValue(vital.key, data.value)
-
           return (
-            <div key={vital.key} className="vital-item">
+            <div key={vital.key} className="vital-card">
               <div className="vital-header">
-                <div>
-                  <h3 className="vital-label">{vital.label}</h3>
-                  <p className="vital-description">{vital.description}</p>
+                <div className="vital-title-row">
+                  <span className="vital-abbr">{vital.label}</span>
+                  <div className="tooltip-wrapper">
+                    <button 
+                      className="info-btn"
+                      onMouseEnter={() => setActiveTooltip(vital.key)}
+                      onMouseLeave={() => setActiveTooltip(null)}
+                      onClick={() => setActiveTooltip(activeTooltip === vital.key ? null : vital.key)}
+                    >
+                      <InfoIcon />
+                    </button>
+                    {activeTooltip === vital.key && (
+                      <div className="tooltip">
+                        <div className="tooltip-full-name">{vital.fullName}</div>
+                        <div className="tooltip-description">{vitalInfo[vital.key].description}</div>
+                        <div className="tooltip-scale">
+                          {vitalInfo[vital.key].scale.map((item, idx) => (
+                            <div key={idx} className="tooltip-scale-item">
+                              <span className="tooltip-scale-dot" style={{ background: item.color }} />
+                              <span className="tooltip-scale-label">{item.label}</span>
+                              <span className="tooltip-scale-range">{item.range}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <span
-                  className="vital-status"
-                  style={{
-                    color: statusColor,
-                    backgroundColor: `${statusColor}15`,
-                  }}
-                >
-                  {statusLabel}
+                <span className={`vital-status ${statusInfo.class}`}>
+                  {statusInfo.label}
                 </span>
               </div>
-              <div className="vital-value" style={{ color: statusColor }}>
+              
+              <h3 className="vital-name">{vital.fullName}</h3>
+              
+              <div className={`vital-value ${statusInfo.class}`}>
                 {displayValue}
               </div>
-              {data.note && (
-                <p className="vital-note">{data.note}</p>
-              )}
+              
+              <div className="vital-progress">
+                <div className="progress-track">
+                  <div className="progress-zones">
+                    <div className="zone good" />
+                    <div className="zone moderate" />
+                    <div className="zone poor" />
+                  </div>
+                  <div 
+                    className={`progress-indicator ${statusInfo.class}`}
+                    style={{ left: `${getProgressPercent()}%` }}
+                  />
+                </div>
+                <div className="progress-labels">
+                  <span>Good</span>
+                  <span>Poor</span>
+                </div>
+              </div>
             </div>
           )
         })}
       </div>
     </div>
   )
-}
-
-// Fallback formatter for old format
-function formatValue(metric, value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return 'N/A'
-  const numValue = Number(value)
-  if (Number.isNaN(numValue)) return 'N/A'
-  
-  if (metric === 'lcp') {
-    // LCP might be in ms (Lighthouse) or seconds (old format)
-    if (numValue > 100) {
-      // Probably milliseconds
-      return `${(numValue / 1000).toFixed(1)} s`
-    }
-    return `${numValue.toFixed(2)} s`
-  }
-  if (metric === 'inp') return `${Math.round(numValue)} ms`
-  if (metric === 'cls') return numValue.toFixed(3)
-  return String(value)
 }
 
 export default WebVitalsCard
