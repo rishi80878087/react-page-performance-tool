@@ -25,12 +25,26 @@ const api = axios.create({
  * @param {Object} options.auth - Authentication data (optional)
  * @returns {Promise<Object>} Performance analysis result
  */
-export async function analyzeURL(url, options = {}) {
-  const { 
-    deviceType = 'desktop', 
-    networkThrottling = '4g',
-    auth = null 
-  } = options
+export async function analyzeURL(urlOrOptions, options = {}) {
+  // Handle both calling conventions:
+  // 1. analyzeURL(url, { deviceType, networkThrottling, auth })
+  // 2. analyzeURL({ url, deviceType, networkThrottling, auth })
+  
+  let url, deviceType, networkThrottling, auth
+  
+  if (typeof urlOrOptions === 'string') {
+    // New format: URL as first arg
+    url = urlOrOptions
+    deviceType = options.deviceType || 'desktop'
+    networkThrottling = options.networkThrottling || '4g'
+    auth = options.auth || null
+  } else if (typeof urlOrOptions === 'object' && urlOrOptions !== null) {
+    // Old format or full options object
+    url = urlOrOptions.url
+    deviceType = urlOrOptions.deviceType || 'desktop'
+    networkThrottling = urlOrOptions.networkThrottling || '4g'
+    auth = urlOrOptions.auth || urlOrOptions.authData || null
+  }
 
   const requestBody = {
     url,

@@ -121,6 +121,15 @@ function categorizeIssues(opportunities, diagnostics) {
       severity = 'warning'
     }
 
+    // Format resource items for display
+    const files = (opp.items || []).map(item => ({
+      url: item.url,
+      size: item.wastedBytes || item.transferSize || 0,
+      sizeFormatted: formatBytes(item.wastedBytes || item.transferSize || 0),
+      wastedMs: item.wastedMs || 0,
+      wastedMsFormatted: item.wastedMs ? formatTime(item.wastedMs) : null,
+    }))
+
     issues.push({
       id: opp.id,
       title: opp.title,
@@ -134,11 +143,21 @@ function categorizeIssues(opportunities, diagnostics) {
         bytesFormatted: formatBytes(opp.savings.bytes),
       },
       score: opp.score,
+      files, // Actual resources/URLs causing the issue
     })
   })
 
   // Process diagnostics (no direct savings but important)
   diagnostics.forEach(diag => {
+    // Format resource items for display
+    const files = (diag.items || []).map(item => ({
+      url: item.url,
+      size: item.wastedBytes || item.transferSize || 0,
+      sizeFormatted: formatBytes(item.wastedBytes || item.transferSize || 0),
+      wastedMs: item.wastedMs || 0,
+      wastedMsFormatted: item.wastedMs ? formatTime(item.wastedMs) : null,
+    }))
+
     issues.push({
       id: diag.id,
       title: diag.title,
@@ -147,6 +166,7 @@ function categorizeIssues(opportunities, diagnostics) {
       displayValue: diag.displayValue,
       savings: { time: 0, bytes: 0 },
       score: diag.score,
+      files, // Actual resources/URLs causing the issue
     })
   })
 
@@ -171,6 +191,7 @@ function processReport(lighthouseData) {
     raw,
     originalUrl, // Added for redirect detection
     screenshot, // Screenshot of analyzed page (base64)
+    verifiedFinalUrl, // Final URL verified with auth (from screenshot page)
   } = lighthouseData
 
   // Process Core Web Vitals for display
@@ -251,13 +272,20 @@ function processReport(lighthouseData) {
   }
 
   // Check for URL redirect (indicates possible auth failure)
-  const finalUrl = raw.finalUrl
+  // Use verifiedFinalUrl (from screenshot with auth) if available, otherwise use Lighthouse's finalUrl
+  // This is important because Lighthouse may not have had proper auth, but screenshot does
+  const lighthouseFinalUrl = raw.finalUrl
+  const finalUrl = verifiedFinalUrl || lighthouseFinalUrl
+  
   // Use Lighthouse's requestedUrl as the original URL if we don't have one
   const effectiveOriginalUrl = originalUrl || raw.requestedUrl
   const urlRedirected = effectiveOriginalUrl && finalUrl && !urlsMatch(effectiveOriginalUrl, finalUrl)
   
   // Log for debugging
   console.log(`   URL check: original="${effectiveOriginalUrl}" -> final="${finalUrl}" (redirected: ${urlRedirected})`)
+  if (verifiedFinalUrl && verifiedFinalUrl !== lighthouseFinalUrl) {
+    console.log(`   ℹ️ Using verified final URL (Lighthouse had: ${lighthouseFinalUrl})`)
+  }
   
   // Return structured report
   return {

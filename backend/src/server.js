@@ -100,6 +100,9 @@ app.post('/api/analyze', async (req, res) => {
   try {
     const { url } = req.body
 
+    // Get analysis options from request (optional)
+    const { deviceType = 'desktop', networkThrottling = '4g', auth = null } = req.body
+
     if (!url) {
       return res.status(400).json({
         status: 'error',
@@ -108,19 +111,28 @@ app.post('/api/analyze', async (req, res) => {
       })
     }
 
+    // Check if auth data is provided (for authenticated pages)
+    const hasAuth = auth && (
+      (auth.cookies && auth.cookies.length > 0) ||
+      (auth.localStorage && Object.keys(auth.localStorage).length > 0) ||
+      (auth.sessionStorage && Object.keys(auth.sessionStorage).length > 0)
+    )
+
     // Validate URL format and accessibility
-    // Increased timeout to 30 seconds for slow-loading pages
+    // Skip accessibility check if auth data is provided (the page may require login)
     const validationResult = await validateURL(url, {
-      timeout: 30000, // 30 seconds (increased from 10)
-      checkAccessibility: true
+      timeout: 30000, // 30 seconds
+      checkAccessibility: !hasAuth // Skip accessibility check for authenticated pages
     })
 
-    // URL is valid and accessible, proceed with analysis
+    if (hasAuth) {
+      console.log(`🔒 Authentication data provided - skipping public accessibility check`)
+      console.log(`   Auth contains: ${auth.cookies?.length || 0} cookies, ${Object.keys(auth.localStorage || {}).length} localStorage items`)
+    }
+
+    // URL is valid (format check passed), proceed with analysis
     console.log(`Starting performance analysis for: ${validationResult.url}`)
     
-    // Get analysis options from request (optional)
-    const { deviceType = 'desktop', networkThrottling = '4g', auth = null } = req.body
-
     // Log auth info if provided
     if (auth) {
       console.log(`🔒 Authentication enabled (type: ${auth.type})`)

@@ -78,7 +78,19 @@ async function injectAuthentication(browser, url, auth) {
   const domain = urlObj.hostname
   
   // Check if we have any meaningful auth data
-  const hasCookies = auth.cookies && auth.cookies.trim().length > 0
+  // Handle cookies as either string or array
+  let cookieString = ''
+  if (auth.cookies) {
+    if (typeof auth.cookies === 'string') {
+      cookieString = auth.cookies.trim()
+    } else if (Array.isArray(auth.cookies)) {
+      // Convert array of cookie objects to string
+      cookieString = auth.cookies
+        .map(c => typeof c === 'string' ? c : `${c.name}=${c.value}`)
+        .join('; ')
+    }
+  }
+  const hasCookies = cookieString.length > 0
   const hasHeaders = auth.headers && Object.keys(auth.headers).length > 0
   const hasLocalStorage = auth.localStorage && Object.keys(auth.localStorage).length > 0
   const hasSessionStorage = auth.sessionStorage && Object.keys(auth.sessionStorage).length > 0
@@ -107,8 +119,8 @@ async function injectAuthentication(browser, url, auth) {
   
   // Add cookies
   if (hasCookies) {
-    extraHeaders['Cookie'] = auth.cookies
-    console.log(`   🍪 Found ${auth.cookies.split(';').length} cookies`)
+    extraHeaders['Cookie'] = cookieString
+    console.log(`   🍪 Found ${cookieString.split(';').length} cookies`)
   }
   
   // Add Authorization from cURL if not already set
@@ -117,87 +129,155 @@ async function injectAuthentication(browser, url, auth) {
     console.log(`   🔑 Found Authorization header from cURL`)
   }
   
-  const context = await browser.newContext()
-  const page = await context.newPage()
+  // For session-based auth, we need to inject storage via CDP
+  // so it persists when Lighthouse creates its own page
   
-  try {
-    if (auth.type === 'login') {
-      // Login form authentication
-      console.log(`   📝 Performing login at: ${auth.loginUrl}`)
-      await page.goto(auth.loginUrl, { waitUntil: 'networkidle', timeout: 30000 })
-      
-      // Fill and submit login form
-      await page.fill(auth.usernameSelector, auth.username)
-      await page.fill(auth.passwordSelector, auth.password)
-      await page.click(auth.submitSelector)
-      
-      // Wait for login to complete
-      await page.waitForTimeout(auth.waitAfterLogin || 3000)
-      console.log('   ✅ Login completed')
-      
-    } else {
-      // Session/Manual: Inject cookies and storage
-      
-      // Inject cookies via Playwright context (for page's JavaScript to access)
-      if (hasCookies) {
-        const cookies = parseCookies(auth.cookies, domain)
-        if (cookies.length > 0) {
-          await context.addCookies(cookies)
-          console.log(`   🍪 Injected ${cookies.length} cookies into browser`)
-        }
-      }
-      
-      // Now navigate to the domain to set up localStorage
-      try {
-        await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 })
-      } catch (navError) {
-        console.log(`   ⚠️ Navigation warning: ${navError.message}`)
-        // Continue - page might have redirected
-      }
-      
-      // Inject localStorage (with error handling for navigation)
-      if (hasLocalStorage) {
+  // Build localStorage injection script that runs on every new page
+  let storageInjectionScript = ''
+  
+  if (hasLocalStorage) {
+    const storageData = JSON.stringify(auth.localStorage)
+    storageInjectionScript += `
+      (function() {
         try {
+          const data = ${storageData};
+          for (const [key, value] of Object.entries(data)) {
+            localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+          }
+        } catch(e) { console.error('LocalStorage injection error:', e); }
+      })();
+    `
+    console.log(`   💾 Prepared ${Object.keys(auth.localStorage).length} localStorage items for injection`)
+  }
+  
+  if (hasSessionStorage) {
+    const sessionData = JSON.stringify(auth.sessionStorage)
+    storageInjectionScript += `
+      (function() {
+        try {
+          const data = ${sessionData};
+          for (const [key, value] of Object.entries(data)) {
+            sessionStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+          }
+        } catch(e) { console.error('SessionStorage injection error:', e); }
+      })();
+    `
+    console.log(`   📦 Prepared ${Object.keys(auth.sessionStorage).length} sessionStorage items for injection`)
+  }
+
+  // Use CDP to inject storage script on every new document
+  // This ensures localStorage is set BEFORE the page's JavaScript runs
+  if (storageInjectionScript) {
+    try {
+      // Connect to browser via CDP - need to get a PAGE target, not the browser
+      const cdpUrl = `http://127.0.0.1:${9222}`
+      
+      // First, list all targets and find/create a page target
+      const targetsResponse = await fetch(`${cdpUrl}/json/list`)
+      let targets = await targetsResponse.json()
+      
+      // Find existing page target or we'll need to create one
+      let pageTarget = targets.find(t => t.type === 'page')
+      
+      if (!pageTarget) {
+        // Create a new page by opening about:blank
+        const newTabResponse = await fetch(`${cdpUrl}/json/new?about:blank`)
+        pageTarget = await newTabResponse.json()
+      }
+      
+      // Connect to the page target
+      const CDP = (await import('chrome-remote-interface')).default
+      const client = await CDP({ target: pageTarget.webSocketDebuggerUrl })
+      
+      const { Page, Runtime } = client
+      await Page.enable()
+      
+      // This script will run BEFORE any page script on every navigation
+      await Page.addScriptToEvaluateOnNewDocument({
+        source: storageInjectionScript
+      })
+      
+      console.log('   ✅ Storage injection script registered via CDP')
+      
+      // Navigate to the origin to initialize localStorage domain
+      await Page.navigate({ url: origin })
+      await Page.loadEventFired()
+      
+      // Verify localStorage was set
+      const result = await Runtime.evaluate({
+        expression: 'Object.keys(localStorage).length'
+      })
+      console.log(`   📋 LocalStorage has ${result.result.value} items after injection`)
+      
+      // Don't close - Lighthouse will use this browser
+      
+    } catch (cdpError) {
+      console.log(`   ⚠️ CDP storage injection failed: ${cdpError.message}`)
+      console.log('   Falling back to Playwright-based injection...')
+      
+      // Fallback: Use Playwright to create a page and inject localStorage
+      // This page will persist and Lighthouse may use the same localStorage
+      const context = await browser.newContext()
+      const page = await context.newPage()
+      
+      try {
+        // Navigate to origin to set localStorage
+        await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 15000 })
+        
+        if (hasLocalStorage) {
           await page.evaluate((storage) => {
             for (const [key, value] of Object.entries(storage)) {
               localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
             }
           }, auth.localStorage)
-          console.log(`   💾 Injected ${Object.keys(auth.localStorage).length} localStorage items`)
-        } catch (evalError) {
-          console.log(`   ⚠️ LocalStorage injection skipped: ${evalError.message}`)
+          
+          // Verify
+          const count = await page.evaluate(() => Object.keys(localStorage).length)
+          console.log(`   📋 LocalStorage has ${count} items after Playwright injection`)
         }
+        
+        // IMPORTANT: Don't close this page - keep it open so localStorage persists
+        // Lighthouse should share the same localStorage for same-origin pages
+        console.log('   ✅ Playwright storage injection completed (page kept open)')
+        
+      } catch (fallbackError) {
+        console.log(`   ⚠️ Fallback injection failed: ${fallbackError.message}`)
       }
-      
-      // Inject sessionStorage (with error handling for navigation)
-      if (hasSessionStorage) {
-        try {
-          await page.evaluate((storage) => {
-            for (const [key, value] of Object.entries(storage)) {
-              sessionStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
-            }
-          }, auth.sessionStorage)
-          console.log(`   📦 Injected ${Object.keys(auth.sessionStorage).length} sessionStorage items`)
-        } catch (evalError) {
-          console.log(`   ⚠️ SessionStorage injection skipped: ${evalError.message}`)
-        }
-      }
-      
-      console.log('   ✅ Session data injection attempted')
-    }
-    
-  } catch (error) {
-    console.error('   ❌ Auth injection error:', error.message)
-    // Don't throw - let Lighthouse run anyway and show redirect warning
-    console.log('   Continuing with analysis...')
-  } finally {
-    // Close page but keep context for Lighthouse
-    try {
-      await page.close()
-    } catch (e) {
-      // Ignore close errors
     }
   }
+  
+  // Also inject cookies via CDP for cookie-based auth
+  if (hasCookies) {
+    try {
+      const CDP = (await import('chrome-remote-interface')).default
+      const cdpUrl = `http://127.0.0.1:${9222}`
+      const response = await fetch(`${cdpUrl}/json/version`)
+      const { webSocketDebuggerUrl } = await response.json()
+      const client = await CDP({ target: webSocketDebuggerUrl })
+      
+      const { Network } = client
+      await Network.enable()
+      
+      // Parse and set cookies via CDP
+      const cookies = parseCookies(cookieString, domain)
+      for (const cookie of cookies) {
+        await Network.setCookie({
+          name: cookie.name,
+          value: cookie.value,
+          domain: cookie.domain || domain,
+          path: cookie.path || '/',
+          secure: cookie.secure || origin.startsWith('https'),
+          httpOnly: cookie.httpOnly || false,
+        })
+      }
+      
+      console.log(`   🍪 Injected ${cookies.length} cookies via CDP`)
+    } catch (cookieError) {
+      console.log(`   ⚠️ CDP cookie injection failed: ${cookieError.message}`)
+    }
+  }
+  
+  console.log('   ✅ Authentication injection completed')
   
   // Return extracted headers for Lighthouse
   if (Object.keys(extraHeaders).length > 0) {
@@ -341,7 +421,10 @@ async function analyzePerformance(url, options = {}) {
 
     // Take screenshot of the analyzed page for verification
     // Use the same auth headers that were passed to Lighthouse
+    // Also verify if auth was successful by checking the final URL
     let screenshot = null
+    let verifiedFinalUrl = lhr.finalUrl // Default to Lighthouse's final URL
+    
     try {
       console.log('   📸 Taking screenshot of analyzed page...')
       
@@ -389,9 +472,56 @@ async function analyzePerformance(url, options = {}) {
         }
       }
       
-      // Navigate to the final URL that was analyzed
-      await screenshotPage.goto(lhr.finalUrl, { waitUntil: 'networkidle', timeout: 30000 })
-      await screenshotPage.waitForTimeout(1500) // Wait for any final renders
+      // Navigate to the ORIGINAL requested URL (not lhr.finalUrl)
+      // This allows us to verify if auth was successful
+      console.log(`   🔗 Navigating to requested URL: ${url}`)
+      await screenshotPage.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+      await screenshotPage.waitForTimeout(2000) // Wait for any client-side routing
+      
+      // Get the actual final URL after navigation with auth
+      let currentUrl = screenshotPage.url()
+      console.log(`   🔍 Initial URL after navigation: ${currentUrl}`)
+      
+      // For SPAs: wait for potential client-side routing to update URL
+      // If URL contains 'login' but we have auth, wait a bit more for redirect
+      if (auth && currentUrl.includes('login')) {
+        console.log('   ⏳ Waiting for potential client-side auth redirect...')
+        await screenshotPage.waitForTimeout(3000) // Extra wait for SPA routing
+        currentUrl = screenshotPage.url()
+        console.log(`   🔍 URL after extra wait: ${currentUrl}`)
+      }
+      
+      // For SPAs that render content without updating URL:
+      // Check if auth actually worked by looking at page title/content
+      let authWorkedBasedOnContent = false
+      if (auth && currentUrl.includes('login')) {
+        try {
+          const pageTitle = await screenshotPage.title()
+          const pageContent = await screenshotPage.evaluate(() => document.body.innerText.substring(0, 500))
+          console.log(`   📄 Page title: "${pageTitle}"`)
+          
+          // Check if page title/content indicates login page
+          const isLoginPage = 
+            pageTitle.toLowerCase().includes('login') ||
+            pageTitle.toLowerCase().includes('sign in') ||
+            pageContent.toLowerCase().includes('sign in to your account') ||
+            pageContent.toLowerCase().includes('enter your credentials')
+          
+          if (!isLoginPage) {
+            console.log('   ✅ Page content indicates auth worked (not a login page)')
+            authWorkedBasedOnContent = true
+            // Use the REQUESTED URL since auth worked but SPA didn't update URL
+            currentUrl = url
+          } else {
+            console.log('   ❌ Page content indicates this is still a login page')
+          }
+        } catch (e) {
+          console.log(`   ⚠️ Could not check page content: ${e.message}`)
+        }
+      }
+      
+      verifiedFinalUrl = currentUrl
+      console.log(`   ✅ Final verified URL: ${verifiedFinalUrl}${authWorkedBasedOnContent ? ' (auth verified via content)' : ''}`)
       
       // Take screenshot as base64
       const screenshotBuffer = await screenshotPage.screenshot({ 
@@ -411,6 +541,16 @@ async function analyzePerformance(url, options = {}) {
 
     // Extract metrics from Lighthouse report
     const performanceData = extractLighthouseData(lhr)
+    
+    // Always pass the verified final URL from screenshot
+    // This is more accurate for auth pages since screenshot uses proper auth with localStorage
+    console.log(`   📊 URL Summary:`)
+    console.log(`      - Requested URL: ${url}`)
+    console.log(`      - Lighthouse final URL: ${lhr.finalUrl}`)
+    console.log(`      - Screenshot verified URL: ${verifiedFinalUrl}`)
+    
+    // Always set verifiedFinalUrl so report processor can use it
+    performanceData.verifiedFinalUrl = verifiedFinalUrl
     
     // Add screenshot to performance data
     performanceData.screenshot = screenshot
@@ -535,6 +675,24 @@ function extractLighthouseData(lhr) {
   opportunityAudits.forEach(auditId => {
     const audit = audits[auditId]
     if (audit && audit.score !== null && audit.score < 1) {
+      // Extract resource items (URLs/files causing the issue)
+      const resourceItems = []
+      if (audit.details?.items && Array.isArray(audit.details.items)) {
+        audit.details.items.slice(0, 10).forEach(detailItem => {
+          const resource = {
+            url: detailItem.url || detailItem.source?.url || detailItem.node?.snippet || null,
+            wastedBytes: detailItem.wastedBytes || detailItem.totalBytes || 0,
+            wastedMs: detailItem.wastedMs || 0,
+            transferSize: detailItem.transferSize || 0,
+            // For render-blocking resources
+            label: detailItem.label || null,
+          }
+          if (resource.url) {
+            resourceItems.push(resource)
+          }
+        })
+      }
+
       const item = {
         id: auditId,
         title: audit.title,
@@ -546,6 +704,8 @@ function extractLighthouseData(lhr) {
           bytes: audit.details?.overallSavingsBytes || 0,
           time: audit.details?.overallSavingsMs || 0,
         },
+        // Include actual resource URLs/items
+        items: resourceItems,
       }
 
       if (audit.details?.overallSavingsMs > 0 || audit.details?.overallSavingsBytes > 0) {

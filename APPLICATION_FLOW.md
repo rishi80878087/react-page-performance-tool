@@ -1,4 +1,4 @@
-# Application Flow & Features
+# RenderIQ - Application Flow
 
 ## Tech Stack
 
@@ -15,33 +15,38 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                 │
-│  (React - localhost:5173)                                       │
+│                         FRONTEND                                │
+│  (React - localhost:3000)                                       │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   1. User enters URL                                            │
-│   2. Selects device type (Mobile/Desktop)                       │
-│   3. Clicks "Analyze"                                           │
-│   4. Shows loading spinner                                      │
-│   5. Displays performance report                                │
-│                                                                  │
+│                                                                 │
+│   1. User enters URL in modal                                   │
+│   2. Selects device (Mobile/Desktop)                            │
+│   3. Selects network (Fast/4G/Slow)                             │
+│   4. Optional: Adds auth session data                           │
+│   5. Clicks "Analyze"                                           │
+│   6. Shows loading with performance facts                       │
+│   7. Displays report with screenshot                            │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ POST /api/analyze
-                              │ { url, deviceType }
+                              │ { url, deviceType, networkThrottling, auth }
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         BACKEND                                  │
+│                         BACKEND                                 │
 │  (Express - localhost:5000)                                     │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   1. Validate URL (format + accessibility)                      │
-│   2. Launch headless Chromium (Playwright)                      │
-│   3. Run Lighthouse analysis                                    │
-│   4. Extract metrics & opportunities                            │
-│   5. Process report for UI                                      │
-│   6. Return JSON response                                       │
-│                                                                  │
+│                                                                 │
+│   1. Validate URL format                                        │
+│   2. Check accessibility (skip if auth provided)                │
+│   3. Launch Chromium via Playwright                             │
+│   4. Inject auth data if provided (cookies, localStorage)       │
+│   5. Run Lighthouse analysis                                    │
+│   6. Capture page screenshot                                    │
+│   7. Detect URL redirects                                       │
+│   8. Process report for UI                                      │
+│   9. Return JSON response                                       │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,24 +59,24 @@ react-page-performance-tool/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── LandingPage.jsx    # URL input page
-│   │   │   └── ReportPage.jsx     # Results display
+│   │   │   ├── LandingPage.jsx      # Hero + modal trigger
+│   │   │   ├── ReportPage.jsx       # Performance results
+│   │   │   └── DocsPage.jsx         # Help documentation
 │   │   ├── components/
-│   │   │   ├── URLInput.jsx       # URL input field
-│   │   │   ├── AnalysisOptions.jsx # Device/Network selector
-│   │   │   ├── ScoreCard.jsx      # Performance score
-│   │   │   ├── WebVitalsCard.jsx  # LCP, INP, CLS
-│   │   │   ├── MetricsList.jsx    # FCP, SI, TBT, TTFB
-│   │   │   ├── IssuesList.jsx     # Opportunities
-│   │   │   ├── LoadingSpinner.jsx
-│   │   │   └── ErrorMessage.jsx
-│   │   └── services/
-│   │       └── api.js             # API calls
+│   │   │   ├── AnalyzeModal.jsx     # URL input + options + auth
+│   │   │   ├── ScoreCard.jsx        # Speedometer score display
+│   │   │   ├── WebVitalsCard.jsx    # LCP, FID, CLS
+│   │   │   ├── MetricsList.jsx      # FCP, SI, TBT, TTFB
+│   │   │   ├── IssuesList.jsx       # Performance issues
+│   │   │   └── LoadingSpinner.jsx   # Loading with facts
+│   │   ├── services/
+│   │   │   └── api.js               # Axios API calls
+│   │   └── App.jsx                  # Router setup
 │   └── package.json
 │
 └── backend/
     ├── src/
-    │   ├── server.js              # Express server
+    │   ├── server.js                # Express server + routes
     │   └── services/
     │       ├── performanceAnalyzer.js  # Lighthouse + Playwright
     │       ├── reportProcessor.js      # Format data for UI
@@ -81,43 +86,34 @@ react-page-performance-tool/
 
 ---
 
-## Implemented Features
+## Features
 
-### ✅ Core Features
-- [x] URL input with validation
-- [x] Mobile/Desktop device selection
-- [x] Performance score (0-100)
-- [x] Core Web Vitals (LCP, INP, CLS)
-- [x] Performance metrics (FCP, SI, TBT, TTFB)
-- [x] Performance issues & opportunities
-- [x] Download report (JSON)
-- [x] Loading states
-- [x] Error handling
+### Core Features
+- URL input with format validation
+- Device selection (Desktop/Mobile)
+- Network throttling (Fast/4G/Slow)
+- Performance score with speedometer (0-100)
+- Core Web Vitals (LCP, FID, CLS)
+- Performance metrics (FCP, SI, TBT, TTFB)
+- Performance issues with affected resources
+- Page screenshot capture
+- URL redirect detection
+- JSON report download
+- Help/documentation page
 
-### ✅ Backend Features
-- [x] Lighthouse integration
-- [x] Playwright browser automation
-- [x] URL format validation
-- [x] URL accessibility check
-- [x] Desktop config (matches Chrome DevTools)
-- [x] Mobile config (matches Chrome DevTools)
+### Authentication Features
+- Session export via bookmarklet
+- Cookies injection
+- localStorage/sessionStorage injection
+- HttpOnly cookie support (manual paste)
 
-### ✅ Authentication Features
-- [x] Session export via bookmarklet
-- [x] Manual cookie/localStorage/sessionStorage input
-- [x] Auto-login form fill
-- [x] HttpOnly cookie support (manual paste from DevTools)
 
-### ❌ Not Implemented
-- [ ] Network throttling (UI exists, not functional)
-- [ ] HTML report download
-- [ ] Report history
-- [ ] Multiple URL analysis
-- [ ] Accessibility/SEO scores
 
 ---
 
-## API Endpoints
+## API
+
+### Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -129,7 +125,13 @@ react-page-performance-tool/
 ```json
 {
   "url": "https://example.com",
-  "deviceType": "desktop"
+  "deviceType": "desktop",
+  "networkThrottling": "4g",
+  "auth": {
+    "cookies": "session_id=abc123",
+    "localStorage": { "token": "jwt..." },
+    "sessionStorage": {}
+  }
 }
 ```
 
@@ -140,14 +142,16 @@ react-page-performance-tool/
   "data": {
     "url": "https://example.com",
     "score": 85,
+    "screenshot": "base64...",
+    "urlRedirect": null,
     "webVitals": {
-      "lcp": { "value": 1200, "status": "good" },
-      "inp": { "value": null, "status": "unknown" },
+      "lcp": { "value": 1.2, "status": "good" },
+      "fid": { "value": null, "status": "unknown" },
       "cls": { "value": 0.05, "status": "good" }
     },
     "metrics": {
-      "fcp": { "value": 800, "status": "good" },
-      "si": { "value": 1500, "status": "good" },
+      "fcp": { "value": 0.8, "status": "good" },
+      "si": { "value": 1.5, "status": "good" },
       "tbt": { "value": 100, "status": "good" },
       "ttfb": { "value": 200, "status": "good" }
     },
@@ -158,103 +162,69 @@ react-page-performance-tool/
 
 ---
 
-## Metrics Displayed
+## Metrics Thresholds
 
 ### Core Web Vitals
-| Metric | Full Name | Good | Needs Work | Poor |
-|--------|-----------|------|------------|------|
-| LCP | Largest Contentful Paint | ≤2.5s | ≤4s | >4s |
-| INP | Interaction to Next Paint | ≤200ms | ≤500ms | >500ms |
-| CLS | Cumulative Layout Shift | ≤0.1 | ≤0.25 | >0.25 |
+| Metric | Good | Moderate | Poor |
+|--------|------|----------|------|
+| LCP | ≤2.5s | ≤4s | >4s |
+| FID | ≤100ms | ≤300ms | >300ms |
+| CLS | ≤0.1 | ≤0.25 | >0.25 |
 
 ### Performance Metrics
-| Metric | Full Name | Affects Score |
-|--------|-----------|--------------|
-| FCP | First Contentful Paint | Yes (10%) |
-| SI | Speed Index | Yes (10%) |
-| TBT | Total Blocking Time | Yes (30%) |
-| TTFB | Time to First Byte | No |
+| Metric | Good | Moderate | Poor |
+|--------|------|----------|------|
+| FCP | ≤1.8s | ≤3s | >3s |
+| SI | ≤3.4s | ≤5.8s | >5.8s |
+| TBT | ≤200ms | ≤600ms | >600ms |
+| TTFB | ≤800ms | ≤1800ms | >1800ms |
 
 ---
 
 ## Score Calculation
 
-```
-Score = Lighthouse calculation (not custom)
-
-Weights:
+Lighthouse weighted scoring:
 - TBT: 30%
 - LCP: 25%
 - CLS: 25%
 - FCP: 10%
-- SI:  10%
-```
+- SI: 10%
 
 ---
 
 ## How to Run
 
 ```bash
-# Terminal 1: Frontend
-cd frontend
-npm run dev
-# → http://localhost:5173
-
-# Terminal 2: Backend
-cd backend
-npm start
+# Terminal 1: Backend
+cd backend && npm start
 # → http://localhost:5000
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+# → http://localhost:3000
 ```
 
 ---
 
-## Authenticated Page Analysis
+## Authentication Guide
 
-### 3 Methods Available:
-
-#### Method 1: Quick Export (Bookmarklet)
-```
-1. Drag "Export Session" bookmarklet to bookmark bar
-2. Login to your site normally
-3. Click bookmarklet → Copies all auth data
-4. Paste in Performance Tool
+### Method 1: Bookmarklet (Recommended)
+1. Drag "Export Session" to bookmark bar
+2. Login to target site
+3. Click bookmarklet → copies session data
+4. Paste in RenderIQ modal
 5. Analyze
-```
 
-#### Method 2: Manual Entry (For HttpOnly Cookies)
-```
-1. Open DevTools (F12) → Application → Cookies
-2. Copy cookie values
-3. Paste in "Manual Entry" section
-4. Also add localStorage/sessionStorage if needed
-```
+### Method 2: Manual (For HttpOnly Cookies)
+1. DevTools (F12) → Application → Cookies
+2. Copy cookie string
+3. Paste in auth section
 
-#### Method 3: Auto Login (Simple Forms Only)
-```
-1. Enter login page URL
-2. Enter username/password
-3. Tool auto-fills and submits
-4. Then analyzes the authenticated page
-```
-
-### Auth Data Structure:
-```json
-{
-  "type": "session",
-  "origin": "https://example.com",
-  "cookies": "session_id=abc123; auth_token=xyz",
-  "localStorage": { "token": "jwt..." },
-  "sessionStorage": { "user": "{...}" }
-}
-```
-
-### Limitations:
-| Auth Type | Works |
-|-----------|-------|
-| Username/Password | ✅ |
+### Limitations
+| Auth Type | Support |
+|-----------|---------|
 | Cookies | ✅ |
 | LocalStorage JWT | ✅ |
-| HttpOnly Cookies | ✅ (manual paste) |
-| 2FA/OTP | ⚠️ (only via session export after login) |
-| CAPTCHA | ⚠️ (only via session export after login) |
-
+| HttpOnly Cookies | ✅ (manual) |
+| 2FA/OTP | ⚠️ (session export after login) |
+| CAPTCHA | ⚠️ (session export after login) |

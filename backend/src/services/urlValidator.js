@@ -124,11 +124,28 @@ async function checkURLAccessibility(url, timeout = 30000) {
     // Consider 2xx and 3xx as accessible
     const isAccessible = response.status >= 200 && response.status < 400
 
+    // Provide specific error messages for common auth-related status codes
+    let error = null
+    if (!isAccessible) {
+      if (response.status === 401) {
+        error = 'Authentication required - please enable "Page requires authentication" and provide session data'
+      } else if (response.status === 403) {
+        error = 'Access forbidden - this page requires authentication. Enable "Page requires authentication" and provide your session data'
+      } else if (response.status === 404) {
+        error = 'Page not found - please check the URL is correct'
+      } else if (response.status >= 500) {
+        error = `Server error (${response.status}) - the website is experiencing issues`
+      } else {
+        error = `URL returned status ${response.status} ${response.statusText}`
+      }
+    }
+
     return {
       isAccessible,
       statusCode: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
+      headers: Object.fromEntries(response.headers.entries()),
+      error
     }
   } catch (error) {
     if (error.name === 'AbortError') {
@@ -204,10 +221,18 @@ async function validateURL(urlString, options = {}) {
     const accessibilityResult = await checkURLAccessibility(normalizedUrl, timeout)
 
     if (!accessibilityResult.isAccessible) {
+      // Determine appropriate HTTP status code for response
+      let httpStatusCode = 400
+      if (accessibilityResult.statusCode >= 500) {
+        httpStatusCode = 502 // Bad Gateway - upstream server error
+      } else if (accessibilityResult.code === 'TIMEOUT') {
+        httpStatusCode = 504 // Gateway Timeout
+      }
+      
       throw new URLValidationError(
         accessibilityResult.error || 'URL is not accessible',
         accessibilityResult.code || 'NOT_ACCESSIBLE',
-        accessibilityResult.statusCode >= 400 && accessibilityResult.statusCode < 500 ? 400 : 500
+        httpStatusCode
       )
     }
 
