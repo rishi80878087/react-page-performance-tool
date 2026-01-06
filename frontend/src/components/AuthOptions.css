@@ -1,0 +1,121 @@
+.auth-options {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.auth-options-expanded {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: #7dd3fc;
+}
+
+.auth-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.auth-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #667eea;
+}
+
+.auth-toggle-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.auth-content {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #bae6fd;
+}
+
+/* Bookmarklet Section */
+.bookmarklet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-instruction {
+  margin: 0;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.bookmarklet-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 8px;
+  cursor: grab;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  width: fit-content;
+}
+
+.bookmarklet-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.bookmarklet-button:active {
+  cursor: grabbing;
+}
+
+.auth-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.auth-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  resize: vertical;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.auth-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.auth-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.auth-success {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.auth-warning {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
