@@ -1,291 +1,153 @@
-# Page Performance Tool - Project Plan
+# RenderIQ - Project Plan
 
-## 🎯 Project Overview
+## Project Overview
 
-A web-based performance analysis tool that scans applications via URL, identifies performance issues, and provides actionable recommendations for optimization.
-
-## 🔍 How Performance Analysis Works
-
-### **Analysis Process:**
-
-1. **Browser Automation**
-   - Launches headless browser (Chrome/Chromium)
-   - Controls browser programmatically
-   - Simulates real user environment
-
-2. **Page Loading**
-   - Navigates to target URL
-   - Loads page in controlled environment
-   - Simulates network conditions (3G/4G speeds)
-   - Applies CPU throttling for realistic testing
-
-3. **Data Collection**
-   - Monitors network requests (timing, size, priority)
-   - Tracks JavaScript execution (main thread blocking)
-   - Records rendering events (paints, layout shifts)
-   - Measures resource loading (images, fonts, scripts)
-   - Captures performance timing APIs
-
-4. **Metric Calculation**
-   - Calculates Core Web Vitals (LCP, FID, CLS)
-   - Computes performance metrics (FCP, TTI, Speed Index, TBT)
-   - Analyzes resource efficiency
-   - Identifies optimization opportunities
-
-5. **Report Generation**
-   - Processes collected data
-   - Calculates performance score (0-100)
-   - Categorizes issues by severity
-   - Generates actionable recommendations
-   - Creates downloadable reports
-   
+A web-based performance analysis tool that analyzes web pages via URL, identifies performance issues, and provides actionable insights using Google Lighthouse.
 
 ---
 
-## 📋 Two-Phase Implementation
+## How It Works
 
-### **Phase 1: Identification & Report Generation**------------------------------------
-**Goal**: Identify performance issues and generate comprehensive reports
-
-**What it does:**
-- Accepts URL input from user
-- Loads application in headless browser environment
-- Measures performance metrics during page load
-- Identifies performance bottlenecks
-- Generates detailed performance report
-- Displays metrics, issues, and potential savings
-
-**Output**: Complete performance report with identified issues
+1. **URL Input** → User enters URL with device/network options
+2. **Validation** → Backend validates URL format and accessibility
+3. **Browser Launch** → Playwright launches headless Chromium
+4. **Authentication** → Injects cookies/localStorage if provided
+5. **Lighthouse Audit** → Runs full performance analysis
+6. **Screenshot** → Captures page screenshot
+7. **Processing** → Extracts metrics, calculates score, identifies issues
+8. **Report** → Returns structured data for UI display
 
 ---
 
-### **Phase 2: Fix Recommendations & Code-Level Analysis**-----------------------------
-**Goal**: Provide actionable fixes and code-level best practices
+## Implementation Status
 
-**What it does:**
-- Maps each issue to specific fix steps
-- Provides code examples and solutions
-- Suggests React best practices (if applicable)
-- Offers optimization strategies
-- Links to relevant documentation
+### Phase 1: Analysis & Reporting ✅ COMPLETE
 
-**Output**: Actionable fix recommendations with code examples
+#### Frontend
+- [x] Landing page with hero section
+- [x] Grid background with fade effect
+- [x] Analysis modal (URL + options + auth)
+- [x] Device selector (Desktop/Mobile)
+- [x] Network throttling (Fast/4G/Slow)
+- [x] Session export bookmarklet
+- [x] Loading spinner with performance facts
+- [x] Report page with all metrics
+- [x] Speedometer score visualization
+- [x] Core Web Vitals cards
+- [x] Performance metrics grid
+- [x] Issues list with resources
+- [x] Screenshot preview + modal
+- [x] Redirect warning card
+- [x] Help/documentation page
+- [x] JSON report download
+- [x] Responsive design
+- [x] Dark theme with glassmorphism
 
----------------------------------------------------------------------------------------
+#### Backend
+- [x] Express server with CORS
+- [x] URL format validation
+- [x] URL accessibility check
+- [x] Playwright + Chromium integration
+- [x] Lighthouse audit execution
+- [x] Desktop/Mobile device emulation
+- [x] Network throttling (Fast/4G/Slow)
+- [x] Cookie injection via CDP
+- [x] LocalStorage injection via CDP
+- [x] Screenshot capture
+- [x] URL redirect detection
+- [x] Metrics extraction
+- [x] Score calculation
+- [x] Issue categorization
+- [x] Resource extraction (up to 10 per issue)
+- [x] Report processing
 
-## 🔧 Phase 1: Detailed Implementation Steps
+### Phase 2: Fix Recommendations ❌ NOT STARTED
 
-### **Step 1: Frontend Development**
-
-#### 1.1 Landing Page UI
-- ✅ Simple, clean interface
-- ✅ URL input box with validation
-- ✅ "Analyze" button
-- ✅ Loading state indicator
-- ✅ Error message display
-- ✅ Device type selector (Desktop/Mobile)
-- ✅ Network throttling selector (WiFi/4G/3G)
-
-#### 1.2 Report Display Page
-- ✅ Performance score visualization
-- ✅ Core Web Vitals display (LCP, FID, CLS)
-- ✅ Performance metrics (FCP, TTI, Speed Index, TBT)
-- ✅ Issues list with severity categorization
-- ✅ Download report feature (JSON/HTML)
-
----
-
-### **Step 2: Backend Development**
-
-#### 2.1 API Server Setup
-- ✅ Express.js server
-- ✅ CORS configuration
-- ✅ Health check endpoint
-- ✅ Error handling middleware
-
-#### 2.2 URL Validation
-- ✅ Format validation (http/https)
-- ✅ Accessibility check (can we reach the URL?)
-- ✅ Timeout handling
-- ✅ Error responses
-
-#### 2.3 Performance Analysis Engine
-- ✅ Set up headless browser automation (Playwright/Chromium)
-- ✅ Configure browser environment (mobile/desktop simulation)
-- ✅ User-configurable device type (Desktop/Mobile)
-- ✅ User-configurable network throttling (WiFi/4G/3G)
-- ✅ Load target URL in controlled browser environment
-- ✅ Collect performance data during page load:
-  - Network request timing and sizes
-  - JavaScript execution metrics
-  - Rendering events (paints, layout shifts)
-  - Resource loading patterns
-- ✅ Simulate real-world conditions (network throttling, CPU throttling)
-- ✅ Execute performance analysis (30-60 seconds)
-
-#### 2.4 Report Processing
-- ✅ Process collected performance data
-- ✅ Calculate Core Web Vitals (LCP, FID, CLS)
-- ✅ Calculate performance metrics (FCP, TTI, Speed Index, TBT)
-- ✅ Calculate overall performance score (0-100)
-- ✅ Identify performance issues and opportunities
-- ✅ Categorize issues by severity:
-  - Critical (high impact, score < 0.5)
-  - Warning (medium impact, score 0.5-0.8)
-  - Info (low impact, score > 0.8)
-- ✅ Calculate potential savings (bytes, time)
-- ✅ Structure data for frontend display
-
-#### 2.5 API Endpoint
-- ✅ `POST /api/analyze` endpoint
-- ✅ Accepts URL in request body
-- ✅ Returns structured report data
-- ✅ Error handling and responses
+- [ ] Map issues to fix steps
+- [ ] Code examples for common issues
+- [ ] React-specific optimizations
+- [ ] Automated fix suggestions
 
 ---
 
-### **Step 3: Integration & Testing**
+## Technology Stack
 
-#### 3.1 Frontend-Backend Connection
-- ✅ API service setup (Axios)
-- ✅ Request/response handling
-- ✅ Error handling
-- ✅ Loading states
-
-#### 3.2 Testing
-- ✅ Test with production URLs
-- ✅ Test with localhost URLs (if supported)
-- ✅ Error scenario testing
-- ✅ UI/UX validation
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, Vite, React Router, Axios |
+| Backend | Node.js, Express.js |
+| Analysis | Google Lighthouse |
+| Automation | Playwright, Chromium |
+| Styling | CSS (custom properties, glassmorphism) |
 
 ---
 
-## 📊 Phase 1 Expected Output
+## Metrics Collected
 
-After Phase 1 completion, the tool will provide:
+### Core Web Vitals
+| Metric | Description | Weight |
+|--------|-------------|--------|
+| LCP | Largest Contentful Paint | 25% |
+| FID | First Input Delay | - |
+| CLS | Cumulative Layout Shift | 25% |
 
-### **Performance Metrics**
-- ✅ Overall performance score (0-100)
-- ✅ Core Web Vitals values and status
-- ✅ Detailed timing metrics (FCP, TTI, Speed Index, TBT)
-
-### **Identified Issues**
-- ✅ List of all performance issues
-- ✅ Severity classification (Critical/Warning/Info)
-- ✅ Specific files/resources causing issues
-- ✅ File sizes and wasted bytes
-- ✅ Potential time savings
-
-### **Report Features**
-- ✅ Visual score display with color coding
-- ✅ Expandable issue details
-- ✅ Download report as JSON
-
-### **Example Issues Identified**
-- ✅ Large JavaScript bundles (with file names and sizes)
-- ✅ Unoptimized images (with specific images)
-- ✅ Render-blocking resources (with resource URLs)
-- ✅ Unused CSS/JavaScript (with percentages)
-- ✅ Missing caching headers
-- ✅ Slow server response times
-
----------------------------------------------------------------------------------------
-
-## 🔨 Phase 2: Fix Recommendations (Future)
-
-### **Step 1: Fix Mapping**
-- Map each performance issue to fix steps
-- Create code examples for common issues
-- Provide tool recommendations
-
-### **Step 2: Code-Level Analysis & suggest/fix the issue**
-- Static code analysis for performance patterns
-- React best practices and code quality 
-- Automated fix suggestions
-
+### Performance Metrics
+| Metric | Description | Weight |
+|--------|-------------|--------|
+| FCP | First Contentful Paint | 10% |
+| SI | Speed Index | 10% |
+| TBT | Total Blocking Time | 30% |
+| TTFB | Time to First Byte | - |
 
 ---
 
-## 🌐 URL Support Strategy
+## Issue Categories
 
-### **Production URLs (Primary)**
-- ✅ Support: `https://example.com`, `https://myapp.vercel.app`
-- ✅ No special configuration needed
-- ✅ Works immediately (works when deployed)
-- ✅ Real-world performance data
-- ✅ Works for both local and deployed backend
-
-### **Localhost URLs (Enhanced)**
-
-#### **Challenge with Deployed Backend:**
-- ⚠️ **If backend is deployed** (Heroku, AWS, etc.), it **CANNOT** access `localhost` on user's machine
-- ⚠️ This is a networking limitation, not a code issue
-- ⚠️ Deployed server cannot reach user's localhost
-
-#### **Solutions for Localhost Scanning:**
-
-**Option A: Tunneling Services (Recommended)**
-- ✅ User uses ngrok/localtunnel to expose localhost
-- ✅ User provides tunnel URL (e.g., `https://abc123.ngrok.io`)
-- ✅ Backend scans the tunnel URL
-- ✅ Works with deployed backend
-- ⚠️ Requires user to set up tunnel (simple but extra step)
-
-**Option B: Local Backend (Not Ideal)**
-- ✅ User runs backend locally on their machine
-- ✅ Backend can access their localhost
-- ❌ Defeats purpose of deployment
-- ❌ Not scalable
-
-**Option C: GitHub Integration - Static Code Analysis (Feasible - Phase 2)**
-- ✅ Clone repo → Analyze code files → Generate report
-- ✅ **Much simpler** than running apps (2-3 weeks vs 6-8 weeks)
-- ✅ No need to build/run the application
-- ✅ Faster analysis (10-30 seconds vs 2-5 minutes)
-- ✅ Finds code-level issues and best practices
-- ✅ Complements runtime analysis perfectly
-- 💡 **Recommendation**: Great addition for Phase 2!
-
-**Note**: This is **static code analysis** (analyzing code without running it), which is different from running the app. Much more feasible!
-
-
+| Severity | Criteria | Color |
+|----------|----------|-------|
+| Critical | Time savings >2s OR byte savings >500KB | Red |
+| Warning | Time savings >0.5s OR byte savings >100KB | Orange |
+| Info | Low impact suggestions | Blue |
 
 ---
 
+## Common Issues Detected
 
-## 🚀 Technology Stack
-
-### **Frontend**
-- React 18
-- Vite
-- React Router
-- Axios
-- CSS
-
-### **Backend**
-- Node.js
-- Express.js
-- Puppeteer (Browser automation)
-- Chrome/Chromium (Headless browser)
-
+- Render-blocking resources
+- Unused JavaScript/CSS
+- Unoptimized images
+- Large JavaScript bundles
+- Missing text compression
+- Inefficient cache policy
+- Large DOM size
+- Main thread blocking
 
 ---
 
+## Localhost URL Support
 
+### Challenge
+Deployed backend cannot access user's localhost.
 
-### **GitHub Integration Feasibility**
+### Solutions
 
-**GitHub Integration:**
+**Option A: Tunneling (Recommended)**
+- Use ngrok/localtunnel to expose localhost
+- Provide tunnel URL for analysis
 
-#### **Type 1: Static Code Analysis (Recommended)**
-- **What**: Analyze code files directly without running the app
-- **Is it feasible?** ✅ Yes! (2-3 weeks)
-- **How**: Clone repo → Read code → Analyze patterns → Generate report
-- **Finds**: Code-level issues, best practices, performance anti-patterns
-- **Time per scan**: 10-30 seconds
-- **Complexity**: Medium (just read and analyze files)
-- **Recommendation**: Great for Phase 2!
+**Option B: Local Backend**
+- Run backend locally
+- Can access localhost directly
 
+---
 
-**Status**: Phase 1 in progress | Phase 2 planned
+## Future Enhancements
 
+- HTML report export
+- Report history/storage
+- Batch URL analysis
+- Accessibility score
+- SEO score
+- PWA score
+- GitHub integration for static analysis
+- Comparison between runs
